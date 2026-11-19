@@ -19,12 +19,12 @@ use crate::strings::{
 /// Where the menu was asked for, and the row it is about: `None` for the space under the rows.
 #[derive(Clone)]
 pub(super) struct Asked {
-    pub(super) node: Option<TreeNode>,
+    pub(super) node: Option<TreeNode<Arc<str>>>,
     pub(super) place: MenuPlace,
 }
 
-impl From<TreeContext> for Asked {
-    fn from(context: TreeContext) -> Self {
+impl From<TreeContext<Arc<str>>> for Asked {
+    fn from(context: TreeContext<Arc<str>>) -> Self {
         Self {
             place: context.place(),
             node: Some(context.node),
@@ -60,7 +60,10 @@ impl Command {
 }
 
 /// The rows the menu shows for `node`, in order, `None` standing for a separator.
-pub(super) fn commands(state: &WorkshopState, node: Option<&TreeNode>) -> Vec<Option<Command>> {
+pub(super) fn commands(
+    state: &WorkshopState,
+    node: Option<&TreeNode<Arc<str>>>,
+) -> Vec<Option<Command>> {
     let mut rows = match node {
         Some(group) if group.is_branch() => {
             vec![
@@ -96,7 +99,7 @@ fn written_in_a_known_file(state: &WorkshopState, id: &str) -> bool {
         .any(|entry| entry.id == id && !entry.file.is_empty())
 }
 
-pub(super) fn run(state: &WorkshopState, command: Command, node: Option<&TreeNode>) {
+pub(super) fn run(state: &WorkshopState, command: Command, node: Option<&TreeNode<Arc<str>>>) {
     let id = node.map(|node| node.id.clone());
     match command {
         Command::Show(view) => {
@@ -134,7 +137,7 @@ pub(super) fn run(state: &WorkshopState, command: Command, node: Option<&TreeNod
     }
 }
 
-fn within(group: &TreeNode) -> Vec<Arc<str>> {
+fn within(group: &TreeNode<Arc<str>>) -> Vec<Arc<str>> {
     TreeNode::branch_ids(std::slice::from_ref(group))
 }
 
@@ -150,7 +153,7 @@ pub(super) fn context_layer(
     )
 }
 
-fn rows(state: &WorkshopState, node: Option<TreeNode>) -> Children {
+fn rows(state: &WorkshopState, node: Option<TreeNode<Arc<str>>>) -> Children {
     let state = state.clone();
     Children::new(move || {
         let mut rows = Vec::new();

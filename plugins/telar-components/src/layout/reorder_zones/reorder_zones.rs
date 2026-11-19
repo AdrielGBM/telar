@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use telar::{
-    AreaLayout, Axis, Border, BorderRadius, Chord, Container, DragAxis, DragItem, DragSession,
+    AreaLayout, Axis, Border, BorderRadius, Chord, ConsumedKeys, Container, DragItem, DragSession,
     DropArea, DropAreaId, DropPlace, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, NodeId,
     Props, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension,
     StyledContainer, Transform, after_settle, box_item, chord_pressed,
@@ -106,6 +106,7 @@ type Accepts<P> = Rc<dyn Fn(&P, DropPlace<Slot>) -> bool>;
 type OnDrop<P> = Rc<dyn Fn(P, DropPlace<Slot>)>;
 type OnDetach<P> = Rc<dyn Fn(P, (f32, f32))>;
 type Label = Rc<dyn Fn(Slot) -> String>;
+type OnActivate = Rc<dyn Fn(Slot)>;
 
 /// What a group asks and tells its caller.
 struct Reports<P> {
@@ -113,6 +114,7 @@ struct Reports<P> {
     on_drop: Option<OnDrop<P>>,
     on_detach: Option<OnDetach<P>>,
     label: Option<Label>,
+    on_activate: Option<OnActivate>,
 }
 
 impl<P> Default for Reports<P> {
@@ -122,6 +124,7 @@ impl<P> Default for Reports<P> {
             on_drop: None,
             on_detach: None,
             label: None,
+            on_activate: None,
         }
     }
 }
@@ -142,7 +145,7 @@ struct Group<P: Clone + 'static> {
 
 /// A set of containers, built with [`zone`](Self::zone), whose items are dragged within and between them, and to and from the other areas of the same [`DragSession`].
 ///
-/// An item carries what `payload` makes of its [`Slot`]. A container takes a payload between two of its items, or onto one where [`accepts`](Self::accepts) allows it, and the group reports the drop through [`on_drop`](Self::on_drop) and writes nothing itself. Alt+↑ and Alt+↓ on a focused item move it one gap earlier or later, reported the same way; the group takes no other key, so Enter and Space stay the caller's.
+/// An item carries what `payload` makes of its [`Slot`]. A container takes a payload between two of its items, or onto one where [`accepts`](Self::accepts) allows it, and the group reports the drop through [`on_drop`](Self::on_drop) and writes nothing itself. Alt+↑ and Alt+↓ on a focused item move it one gap earlier or later, reported the same way. A click or Enter on an item is the caller's through [`on_activate`](Self::on_activate); the group takes no other key, so Space and the bare arrows stay the caller's, and Enter too without it.
 ///
 /// The options are read as each container is built, so they are set before the first [`zone`](Self::zone).
 pub struct ReorderGroup<P: Clone + 'static>(Rc<Group<P>>);
@@ -190,6 +193,12 @@ impl<P: Clone + 'static> ReorderGroup<P> {
     /// What an item is called, shown beside the pointer while it is carried: what keeps a payload readable once it has left the container that clips its item.
     pub fn label(self, label: impl Fn(Slot) -> String + 'static) -> Self {
         self.0.reports.borrow_mut().label = Some(Rc::new(label));
+        self
+    }
+
+    /// Told which item a click or Enter opened: a press that never travelled past the drag threshold, or Enter on the focused item. Without it the group takes neither, and Enter stays with whatever is around it.
+    pub fn on_activate(self, on_activate: impl Fn(Slot) + 'static) -> Self {
+        self.0.reports.borrow_mut().on_activate = Some(Rc::new(on_activate));
         self
     }
 
@@ -382,14 +391,10 @@ impl<P: Clone + 'static> Group<P> {
             // Read only inside the restyle effect: `item` runs inside the list's reconcile effect, and a read here would reconcile the list from inside its own event dispatch.
             wrapper = wrapper.styled_by(move || group.gap_style(slot, count.get(), axis, gap));
         }
-        if self.reach.get() == Reach::OwnZone {
-            let group = Rc::clone(self);
+        if let Some(on_activate) = self.reports.borrow().on_activate.clone() {
             wrapper = wrapper
-                .drag_axis(match axis {
-                    Axis::Horizontal => DragAxis::Horizontal,
-                    Axis::Vertical => DragAxis::Vertical,
-                })
-                .drag_within(move || group.bounds(slot, rect));
+                .on_press(move || on_activate(slot))
+                .consumes_keys(|| ConsumedKeys::ENTER);
         }
         let wrapper = wrapper
             .with_transform({
@@ -434,6 +439,10 @@ impl<P: Clone + 'static> Group<P> {
         }
         if let Some(on_detach) = self.reports.borrow().on_detach.clone() {
             picked = picked.on_detach(move |payload, at| on_detach(payload, at));
+        }
+        if self.reach.get() == Reach::OwnZone {
+            let group = Rc::clone(self);
+            picked = picked.along(axis).within(move || group.bounds(slot));
         }
         Ok(box_item(self.session.item(wrapper, picked)))
     }
@@ -582,16 +591,13 @@ impl<P: Clone + 'static> Group<P> {
         gaps.get(at.checked_add_signed(by)?).copied()
     }
 
-    /// The box an item of `slot` may be carried in under [`Reach::OwnZone`], in that item's own coordinates (its laid-out rect is `mine`).
+    /// The box an item of `slot` may be carried in under [`Reach::OwnZone`]: its container, in the space the item is laid out in.
     ///
     /// Read off the frozen container once a stroke is running: a gap moves the items and grows the live box, which would move the clamped point, which moves the gap, and at the edge the item would swap with its neighbour for ever on a pointer standing still.
-    fn bounds(&self, slot: Slot, mine: RwSignal<Rect>) -> Rect {
-        let zone = self
-            .measured(slot.zone)
+    fn bounds(&self, slot: Slot) -> Rect {
+        self.measured(slot.zone)
             .map(|zone| zone.rect)
-            .unwrap_or_default();
-        let me = mine.peek();
-        Rect::new(zone.x - me.x, zone.y - me.y, zone.width, zone.height)
+            .unwrap_or_default()
     }
 
     /// The layout style [`DropPreview::Gap`] gives the item at `slot` of a container holding `len`: the slot the carried item came out of pulled shut, and one of its size opened where the drop would land.

@@ -4,7 +4,8 @@ use telar::preview::{
     Layout, Matrix, Play, PlayResult, PreviewEntry, Query, by_role, by_text, preview,
 };
 use telar::{
-    AreaLayout, Axis, Container, DragSession, DropArea, DropPlace, LayoutError, LayoutItem,
+    AreaLayout, Axis, Container, DragSession, DropArea, DropPlace, Key, LayoutError, LayoutItem,
+    NamedKey,
     LayoutStyle, Reactive, RectStyle, Role, RwSignal, StyledContainer, box_item, signal,
     track_layout,
 };
@@ -195,6 +196,59 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )?;
             sample::expect_names(canvas, &by_role(Role::ListItem), &["Draft", "Ship"])?;
             canvas.expect_text("Binned: 1")
+        }),
+        preview!(reorder_zones, "Opened on a click", |_p| {
+            let pages = signal(vec!["Cover", "Contents", "Chapter one"]);
+            let opened = signal(None::<&'static str>);
+            let list = ReorderGroup::new(&DragSession::new(), |slot: Slot| slot)
+                .on_drop(move |from, place| {
+                    if let DropPlace::Between(to) = place {
+                        pages.update(|pages| {
+                            telar::apply_move(pages, from.index, to.index);
+                        });
+                    }
+                })
+                .on_activate(move |slot| opened.set(pages.with(|pages| pages.get(slot.index).copied())))
+                .zone(
+                    ReorderZoneProps::props()
+                        .count(Reactive::of(move || pages.get().len()))
+                        .item(Rc::new(move |index| {
+                            sample::tile(Reactive::of(move || {
+                                pages.with(|pages| {
+                                    pages.get(index).copied().unwrap_or_default().to_string()
+                                })
+                            }))
+                        }))
+                        .gap(8.0)
+                        .build(),
+                )?;
+            let shown = sample::text_of(Reactive::of(move || match opened.get() {
+                Some(page) => format!("Opened: {page}"),
+                None => "Opened: none".to_string(),
+            }))?;
+            Ok::<_, LayoutError>(Container::new(
+                LayoutStyle::column().gap(24.0),
+                vec![list, shown],
+            )?)
+        })
+        .props(<ReorderZoneProps as telar::preview::HasPropsSchema>::schema)
+        .title("Layout/Reorder zones")
+        .layout(Layout::Centered)
+        .tags(&["stateful"])
+        .play(|canvas| {
+            let page = |name| by_role(Role::ListItem).named(name);
+            drag_onto(canvas, page("Cover"), page("Chapter one"), 0.75)?;
+            canvas.expect_text("Opened: none")?;
+            canvas.click(page("Contents"))?;
+            canvas.expect_text("Opened: Contents")?;
+            canvas.tab()?;
+            canvas.press(Key::Named(NamedKey::Enter))?;
+            canvas.expect_text("Opened: Chapter one")?;
+            sample::expect_names(
+                canvas,
+                &by_role(Role::ListItem),
+                &["Contents", "Chapter one", "Cover"],
+            )
         }),
     ]
 }

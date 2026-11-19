@@ -1,7 +1,7 @@
 //! [`virtual_list`]: a long list of rows to choose from, one or several, walked from the keyboard, with only the rows on screen built.
 
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use telar::{
 use crate::layout::list::list::ListTokens;
 use crate::shared;
 use crate::shared::rows::{
-    BuiltRows, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
+    BuiltRows, RowKey, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
 };
 use crate::shared::selection::{Gesture, RowSelection, SelectionMode};
 use crate::shared::type_ahead::TypeAhead;
@@ -25,11 +25,11 @@ use telar::ControlSize;
 
 const OVERSCAN: usize = 4;
 
-/// One row of a [`virtual_list`], as data: the id the selection names it by, what it says, and quiet trailing text.
+/// One row of a [`virtual_list`], as data: the key the selection names it by, the caller's own, what it says, and quiet trailing text.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ListRow {
+pub struct ListRow<K> {
     /// Unique among the list's rows.
-    pub id: Arc<str>,
+    pub id: K,
     pub label: Arc<str>,
     /// Quiet trailing text: a count, a size, a date.
     pub detail: Option<Arc<str>>,
@@ -37,10 +37,10 @@ pub struct ListRow {
     pub disabled: bool,
 }
 
-impl ListRow {
-    pub fn new(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
+impl<K: RowKey> ListRow<K> {
+    pub fn new(id: K, label: impl Into<Arc<str>>) -> Self {
         Self {
-            id: id.into(),
+            id,
             label: label.into(),
             detail: None,
             disabled: false,
@@ -59,7 +59,7 @@ impl ListRow {
 }
 
 /// What [`VirtualListProps::row`] builds a row's content with.
-pub type RowBuilder = Rc<dyn Fn(&ListRow) -> Result<Box<dyn LayoutItem>, LayoutError>>;
+pub type RowBuilder<K> = Rc<dyn Fn(&ListRow<K>) -> Result<Box<dyn LayoutItem>, LayoutError>>;
 
 /// A list of any length to choose rows from, read by a screen reader as a list box.
 ///
@@ -67,30 +67,30 @@ pub type RowBuilder = Rc<dyn Fn(&ListRow) -> Result<Box<dyn LayoutItem>, LayoutE
 ///
 /// The keyboard walks a cursor over the rows — the arrows, Home and End, Page Up and Page Down, and type-ahead on the rows' labels — and Enter, Space or a press chooses the row it is on. A reader hears the row the cursor is on as it moves. In [`SelectionMode::Multiple`] the list says it takes several rows, each row says whether it is one of them, and Shift, Ctrl (Command on a Mac) and Space choose them as [`SelectionMode::Multiple`] says.
 #[derive(Props)]
-pub struct VirtualListProps {
+pub struct VirtualListProps<K: RowKey> {
     #[props(into, default)]
-    pub items: Reactive<Vec<ListRow>>,
+    pub items: Reactive<Vec<ListRow<K>>>,
     /// How large the rows are drawn: their height, padding and text, and the message shown while there are none, as [`ControlSize`] works them out. What [`row`](Self::row) builds is sized where it is written.
     #[props(default)]
     pub size: ControlSize,
     /// How many rows can be chosen at once.
     #[props(default)]
     pub selection_mode: SelectionMode,
-    /// The bound selection in [`SelectionMode::Single`], by row id. `None` (the default) is uncontrolled.
+    /// The bound selection in [`SelectionMode::Single`], by row key. `None` (the default) is uncontrolled.
     #[props(some, into, default)]
-    pub selected: Option<RwSignal<Option<Arc<str>>>>,
-    /// The bound selection in [`SelectionMode::Multiple`], by row id. `None` (the default) is uncontrolled and starts empty.
+    pub selected: Option<RwSignal<Option<K>>>,
+    /// The bound selection in [`SelectionMode::Multiple`], by row key. `None` (the default) is uncontrolled and starts empty.
     #[props(some, into, default)]
-    pub selected_rows: Option<RwSignal<BTreeSet<Arc<str>>>>,
+    pub selected_rows: Option<RwSignal<HashSet<K>>>,
     /// Fired with the row a press or Enter chose on its own, and in [`SelectionMode::Single`] the row Space chose.
     #[props(some, default)]
-    pub on_select: Option<Handler<fn(ListRow)>>,
+    pub on_select: Option<Handler<fn(ListRow<K>)>>,
     /// Fired with every row chosen each time a press or a key changes them, in [`SelectionMode::Multiple`].
     #[props(some, default)]
-    pub on_selection_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
+    pub on_selection_change: Option<Handler<fn(HashSet<K>)>>,
     /// Builds what a row shows, in place of its label and detail. The row itself — its height, its wash and what a reader hears it as — stays the list's.
     #[props(some, default)]
-    pub row: Option<RowBuilder>,
+    pub row: Option<RowBuilder<K>>,
     /// Whether a row may run onto more lines than one: its label wraps at the row's width instead of being cut off where the row ends, and what [`row`](Self::row) builds is given the height it asks for, the row growing to hold it. Off (the default), every row is one row height tall, and nothing is measured.
     #[props(default)]
     pub wrap: bool,
@@ -109,7 +109,7 @@ pub struct VirtualListProps {
 }
 
 /// A long list of rows to choose one or several from, with only the rows on screen built.
-pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn virtual_list<K: RowKey>(props: VirtualListProps<K>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let VirtualListProps {
         items,
         size,
@@ -130,7 +130,7 @@ pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, Layo
     let row_height = ListTokens::current().row_height(size);
     let ring_color = color.clone();
 
-    let mut made: Option<Rc<List>> = None;
+    let mut made: Option<Rc<List<K>>> = None;
     let scroll = LayoutScrollArea::new_with(LayoutStyle::new().flex_grow(1.0), |viewport| {
         let list = Rc::new(List {
             rows,
@@ -150,7 +150,7 @@ pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, Layo
         let built = list.places.clone().list(
             OVERSCAN,
             source,
-            |item: &(ListRow, usize)| item.clone(),
+            |item: &(ListRow<K>, usize)| item.clone(),
             move |index, (item, count)| {
                 build_row(&list, item, place(index, count), row.as_ref(), &color)
             },
@@ -191,37 +191,37 @@ pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, Layo
 
 /// The rows as given. Equal only to itself, so the memo notifies on every new list rather than comparing whole lists.
 #[derive(Clone)]
-struct Rows(Rc<Vec<ListRow>>);
+struct Rows<K>(Rc<Vec<ListRow<K>>>);
 
-impl PartialEq for Rows {
+impl<K> PartialEq for Rows<K> {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
-struct List {
-    rows: Memo<Rows>,
+struct List<K: RowKey> {
+    rows: Memo<Rows<K>>,
     /// The row the keyboard is on. Deliberately not the selection: walking the list chooses nothing.
-    cursor: RwSignal<Option<Arc<str>>>,
-    selection: RowSelection,
+    cursor: RwSignal<Option<K>>,
+    selection: RowSelection<K>,
     search: RefCell<TypeAhead>,
-    on_select: Option<Handler<fn(ListRow)>>,
+    on_select: Option<Handler<fn(ListRow<K>)>>,
     places: RowPlaces,
     focus: Cell<Option<FocusId>>,
-    built: BuiltRows<Arc<str>>,
+    built: BuiltRows<K>,
 }
 
-impl List {
-    fn rows(&self) -> Rc<Vec<ListRow>> {
+impl<K: RowKey> List<K> {
+    fn rows(&self) -> Rc<Vec<ListRow<K>>> {
         self.rows.with(|rows| rows.0.clone())
     }
 
-    fn index_of(rows: &[ListRow], id: Option<Arc<str>>) -> Option<usize> {
+    fn index_of(rows: &[ListRow<K>], id: Option<K>) -> Option<usize> {
         let id = id?;
         rows.iter().position(|row| row.id == id)
     }
 
-    fn first_selected(&self, rows: &[ListRow]) -> Option<usize> {
+    fn first_selected(&self, rows: &[ListRow<K>]) -> Option<usize> {
         Self::index_of(
             rows,
             self.selection.first_of(rows.iter().map(|row| &row.id)),
@@ -229,13 +229,13 @@ impl List {
     }
 
     /// Where the keys act from: the cursor while its row is listed, else the first row chosen.
-    fn at(&self, rows: &[ListRow]) -> Option<usize> {
+    fn at(&self, rows: &[ListRow<K>]) -> Option<usize> {
         Self::index_of(rows, self.cursor.peek()).or_else(|| self.first_selected(rows))
     }
 
-    fn shows_cursor(&self, id: &str) -> bool {
+    fn shows_cursor(&self, id: &K) -> bool {
         self.focus.get().is_some_and(focus::is_focus_visible)
-            && self.cursor.with(|cursor| cursor.as_deref() == Some(id))
+            && self.cursor.with(|cursor| cursor.as_ref() == Some(id))
     }
 
     fn cursor_row(&self) -> Option<FocusId> {
@@ -264,15 +264,15 @@ impl List {
         }
     }
 
-    fn move_to(&self, rows: &[ListRow], index: usize) {
+    fn move_to(&self, rows: &[ListRow<K>], index: usize) {
         self.cursor.set(Some(rows[index].id.clone()));
         self.places.reveal(index);
     }
 
     /// Puts the cursor on the row `id` and the keyboard on the list, as a reader moving to that row asks.
-    fn reach(&self, id: &str) {
+    fn reach(&self, id: &K) {
         let rows = self.rows();
-        if let Some(index) = rows.iter().position(|row| &*row.id == id) {
+        if let Some(index) = rows.iter().position(|row| row.id == *id) {
             self.walk_to(&rows, index, None, false);
         }
         if let Some(list) = self.focus.get() {
@@ -281,7 +281,7 @@ impl List {
     }
 
     /// Moves the cursor from `from` to `index`, choosing every row between the anchor and it when `ranging`, and making it the anchor otherwise.
-    fn walk_to(&self, rows: &[ListRow], index: usize, from: Option<usize>, ranging: bool) {
+    fn walk_to(&self, rows: &[ListRow<K>], index: usize, from: Option<usize>, ranging: bool) {
         self.move_to(rows, index);
         let id = &rows[index].id;
         if ranging {
@@ -298,7 +298,7 @@ impl List {
     }
 
     /// Does what `gesture` asks of `row`, and tells [`on_select`](VirtualListProps::on_select) of a row chosen on its own.
-    fn act(&self, rows: &[ListRow], row: &ListRow, gesture: Gesture) {
+    fn act(&self, rows: &[ListRow<K>], row: &ListRow<K>, gesture: Gesture) {
         if row.disabled {
             return;
         }
@@ -313,9 +313,9 @@ impl List {
         }
     }
 
-    fn press(&self, id: &str) {
+    fn press(&self, id: &K) {
         let rows = self.rows();
-        if let Some(row) = rows.iter().find(|row| &*row.id == id) {
+        if let Some(row) = rows.iter().find(|row| row.id == *id) {
             let gesture = Gesture::of_press(self.selection.mode(), telar::modifiers());
             self.act(&rows, row, gesture);
         }
@@ -324,7 +324,7 @@ impl List {
         }
     }
 
-    fn seek(&self, c: char, rows: &[ListRow], at: Option<usize>) {
+    fn seek(&self, c: char, rows: &[ListRow<K>], at: Option<usize>) {
         let needle = self.search.borrow_mut().extend(c);
         let found = needle.find(at, rows.len(), |i| {
             (!rows[i].disabled).then(|| rows[i].label.to_string())
@@ -392,7 +392,7 @@ impl List {
 }
 
 /// The ids of the rows that can be chosen, in the order shown: what a range and Ctrl+A choose among.
-fn choosable(rows: &[ListRow]) -> Vec<Arc<str>> {
+fn choosable<K: RowKey>(rows: &[ListRow<K>]) -> Vec<K> {
     rows.iter()
         .filter(|row| !row.disabled)
         .map(|row| row.id.clone())
@@ -409,7 +409,7 @@ fn place(index: usize, count: usize) -> SetPosition {
 }
 
 /// Where `movement` takes the cursor from `at`, passing over rows it may not stop on; `None` when there are none it may.
-fn walk(rows: &[ListRow], at: Option<usize>, movement: KeyNavMove) -> Option<usize> {
+fn walk<K>(rows: &[ListRow<K>], at: Option<usize>, movement: KeyNavMove) -> Option<usize> {
     let count = rows.len();
     let reachable = |i: usize| !rows[i].disabled;
     match (movement, at) {
@@ -429,7 +429,7 @@ fn walk(rows: &[ListRow], at: Option<usize>, movement: KeyNavMove) -> Option<usi
 }
 
 /// The first row from `from` the cursor may stop on, looking `forward` or back, and the other way when there is none that way.
-fn nearest_reachable(rows: &[ListRow], from: usize, forward: bool) -> Option<usize> {
+fn nearest_reachable<K>(rows: &[ListRow<K>], from: usize, forward: bool) -> Option<usize> {
     let from = from.min(rows.len().checked_sub(1)?);
     let ahead = |forward: bool| -> Option<usize> {
         match forward {
@@ -440,11 +440,11 @@ fn nearest_reachable(rows: &[ListRow], from: usize, forward: bool) -> Option<usi
     ahead(forward).or_else(|| ahead(!forward))
 }
 
-fn build_row(
-    list: &Rc<List>,
-    row: ListRow,
+fn build_row<K: RowKey>(
+    list: &Rc<List<K>>,
+    row: ListRow<K>,
     place: SetPosition,
-    content: Option<&RowBuilder>,
+    content: Option<&RowBuilder<K>>,
     color: &Option<Reactive<Color>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let content = match content {
@@ -509,8 +509,8 @@ fn build_row(
 }
 
 /// A row's label at the list's `size`, taking the room the row has and broken as `wrap` says, and its detail after it, quiet.
-fn default_content(
-    row: &ListRow,
+fn default_content<K>(
+    row: &ListRow<K>,
     size: ControlSize,
     wrap: TextWrap,
 ) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {

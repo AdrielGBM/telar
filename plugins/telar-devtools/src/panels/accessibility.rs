@@ -1,13 +1,15 @@
 //! The accessibility panel: what the checks found, and what a reader is told, as the tree a reader steps through.
 
+use std::sync::Arc;
 use telar::{
     AccessAudit, AccessNode, AccessSeverity, AlignItems, Container, LayoutError, LayoutItem,
     LayoutStyle, Reactive, Text, box_item, children, memo,
 };
+
 use telar_components::{TreeNode, TreeViewProps, tree_view};
 
 use super::count_mounted;
-use super::tree_menu::TreeMenu;
+use super::tree_menu::{TreeMenu, with_any};
 use crate::inspect::Inspection;
 use crate::strings::{
     self, ACCESSIBILITY, AUDIT_CLEAN, AUDIT_UNAVAILABLE, ERRORS, FOCUSED, PROBLEMS, READER,
@@ -82,39 +84,42 @@ fn summary(audit: &AccessAudit) -> String {
 }
 
 /// The panel's rows: the violations under one branch and the reader's nodes under another, nested as the reader nests them, each named by its place, which [`chosen_rect`] reads back.
-pub(crate) fn audit_rows(audit: &AccessAudit) -> Vec<TreeNode> {
+pub(crate) fn audit_rows(audit: &AccessAudit) -> Vec<TreeNode<Arc<str>>> {
     let violations = audit
         .violations
         .iter()
         .enumerate()
         .map(|(index, violation)| {
-            TreeNode::new(violation_row(index), violation.message.clone()).with_badge(format!(
-                "{} · {}",
-                violation.severity.as_str(),
-                violation.rule.id()
-            ))
+            TreeNode::new(Arc::from(violation_row(index)), violation.message.clone()).with_badge(
+                format!("{} · {}", violation.severity.as_str(), violation.rule.id()),
+            )
         });
     let nodes = reader_rows(&audit.nodes);
     vec![
-        TreeNode::new(VIOLATIONS_ROW, strings::text(PROBLEMS))
-            .with_badge(audit.violations.len().to_string())
-            .with_children(violations),
-        TreeNode::new(READER_ROW, strings::text(READER))
-            .with_badge(audit.nodes.len().to_string())
-            .with_children(nodes),
+        with_any(
+            TreeNode::new(Arc::from(VIOLATIONS_ROW), strings::text(PROBLEMS))
+                .with_badge(audit.violations.len().to_string()),
+            violations.collect(),
+        ),
+        with_any(
+            TreeNode::new(Arc::from(READER_ROW), strings::text(READER))
+                .with_badge(audit.nodes.len().to_string()),
+            nodes,
+        ),
     ]
 }
 
 /// The reader's nodes as the tree a reader steps through, each row under the row of the node it sits in.
-fn reader_rows(nodes: &[AccessNode]) -> Vec<TreeNode> {
-    let mut held: Vec<Vec<TreeNode>> = nodes.iter().map(|_| Vec::new()).collect();
+fn reader_rows(nodes: &[AccessNode]) -> Vec<TreeNode<Arc<str>>> {
+    let mut held: Vec<Vec<TreeNode<Arc<str>>>> = nodes.iter().map(|_| Vec::new()).collect();
     let mut top = Vec::new();
     for (index, node) in nodes.iter().enumerate().rev() {
         let mut inside = std::mem::take(&mut held[index]);
         inside.reverse();
-        let row = TreeNode::new(node_row(index), name_of(node))
-            .with_badge(badge_of(node))
-            .with_children(inside);
+        let row = with_any(
+            TreeNode::new(Arc::from(node_row(index)), name_of(node)).with_badge(badge_of(node)),
+            inside,
+        );
         match node.parent.filter(|&parent| parent < index) {
             Some(parent) => held[parent].push(row),
             None => top.push(row),

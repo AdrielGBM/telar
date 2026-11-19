@@ -2,13 +2,15 @@ use telar::memo;
 
 use super::*;
 
-fn tree() -> Vec<TreeNode> {
+fn tree() -> Vec<TreeNode<Arc<str>>> {
     vec![
-        TreeNode::new("page", "Page").with_children([
-            TreeNode::new("form", "Form").with_children([TreeNode::new("save", "Save")]),
-            TreeNode::new("note", "Note"),
+        TreeNode::new(Arc::from("page"), "Page").with_children([
+            TreeNode::new(Arc::from("form"), "Form")
+                .with_children([TreeNode::new(Arc::from("save"), "Save")]),
+            TreeNode::new(Arc::from("note"), "Note"),
         ]),
-        TreeNode::new("footer", "Footer").with_children([TreeNode::new("link", "Link")]),
+        TreeNode::new(Arc::from("footer"), "Footer")
+            .with_children([TreeNode::new(Arc::from("link"), "Link")]),
     ]
 }
 
@@ -31,7 +33,7 @@ fn a_branch_offers_its_own_commands_before_the_whole_tree_s() {
             Some(Command::CollapseAll)
         ]
     );
-    let leaf = &nodes[0].children[1];
+    let leaf = &nodes[0].child_nodes()[1];
     assert_eq!(
         commands(Some(leaf)),
         [Some(Command::ExpandAll), Some(Command::CollapseAll)]

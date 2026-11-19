@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::num::NonZeroU32;
 use telar::testing::{key_with, lay_out, named, press, release, route};
 
@@ -6,18 +6,24 @@ use telar::{AccessNode, ComponentList, DrawCommand, Event, relayout_if_dirty};
 
 use super::*;
 
-fn rows(count: usize) -> Vec<ListRow> {
+type Entry = ListRow<Arc<str>>;
+
+fn entry(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Entry {
+    ListRow::new(id.into(), label)
+}
+
+fn rows(count: usize) -> Vec<Entry> {
     (0..count)
-        .map(|i| ListRow::new(format!("row-{i}"), format!("Row {i}")))
+        .map(|i| entry(format!("row-{i}"), format!("Row {i}")))
         .collect()
 }
 
-fn fruit() -> Vec<ListRow> {
+fn fruit() -> Vec<Entry> {
     vec![
-        ListRow::new("apple", "Apple").with_detail("3"),
-        ListRow::new("banana", "Banana").disabled(true),
-        ListRow::new("blueberry", "Blueberry"),
-        ListRow::new("cherry", "Cherry"),
+        entry("apple", "Apple").with_detail("3"),
+        entry("banana", "Banana").disabled(true),
+        entry("blueberry", "Blueberry"),
+        entry("cherry", "Cherry"),
     ]
 }
 
@@ -28,24 +34,24 @@ struct Mounted {
 }
 
 impl Mounted {
-    fn new(items: Vec<ListRow>, height: f32) -> Self {
+    fn new(items: Vec<Entry>, height: f32) -> Self {
         Self::mount(items, height, false)
     }
 
-    fn wrapping(items: Vec<ListRow>, height: f32) -> Self {
+    fn wrapping(items: Vec<Entry>, height: f32) -> Self {
         let mounted = Self::mount(items, height, true);
         mounted.settle();
         mounted
     }
 
-    fn mount(items: Vec<ListRow>, height: f32, wrap: bool) -> Self {
+    fn mount(items: Vec<Entry>, height: f32, wrap: bool) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::focus::clear();
         let selected = signal(None);
         let picked = Rc::new(RefCell::new(Vec::new()));
         let sink = picked.clone();
         let item = virtual_list(
-            VirtualListProps::props()
+            VirtualListProps::<Arc<str>>::props()
                 .items(items)
                 .selected(selected)
                 .on_select(move |row| sink.borrow_mut().push(row.id.to_string()))
@@ -64,7 +70,7 @@ impl Mounted {
         }
     }
 
-    fn focused(items: Vec<ListRow>, height: f32) -> Self {
+    fn focused(items: Vec<Entry>, height: f32) -> Self {
         let mounted = Self::new(items, height);
         let list = telar::focus::exposed()
             .into_iter()
@@ -268,9 +274,9 @@ fn page_down_moves_a_view_s_worth_and_scrolls_the_cursor_into_view() {
 fn a_row_builder_draws_the_row_while_the_list_keeps_it_a_choosable_option() {
     crate::test_support::fresh_layout_runtime();
     let item = virtual_list(
-        VirtualListProps::props()
+        VirtualListProps::<Arc<str>>::props()
             .items(fruit())
-            .row(Rc::new(|row: &ListRow| {
+            .row(Rc::new(|row: &Entry| {
                 let shout = row.label.to_uppercase();
                 let text = Text::declaring(move || shout.clone(), LayoutStyle::new(), |t| t)?;
                 Ok(box_item(text))
@@ -317,25 +323,25 @@ fn each_option_built_says_its_place_among_all_the_rows() {
 
 struct Several {
     tree: ComponentList,
-    chosen: RwSignal<BTreeSet<Arc<str>>>,
+    chosen: RwSignal<HashSet<Arc<str>>>,
     heard: Rc<RefCell<Vec<String>>>,
 }
 
 impl Several {
-    fn new(items: Vec<ListRow>) -> Self {
+    fn new(items: Vec<Entry>) -> Self {
         Self::mount(items, false)
     }
 
-    fn mount(items: Vec<ListRow>, wrap: bool) -> Self {
+    fn mount(items: Vec<Entry>, wrap: bool) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::testing::reset_keyboard();
         telar::focus::clear();
         crate::test_support::keyboard(telar::KeyboardConvention::Pc);
-        let chosen = signal(BTreeSet::new());
+        let chosen = signal(HashSet::new());
         let heard = Rc::new(RefCell::new(Vec::new()));
         let (changes, picks) = (heard.clone(), heard.clone());
         let item = virtual_list(
-            VirtualListProps::props()
+            VirtualListProps::<Arc<str>>::props()
                 .items(items)
                 .selection_mode(SelectionMode::Multiple)
                 .selected_rows(chosen)
@@ -388,7 +394,9 @@ impl Several {
     }
 
     fn chosen(&self) -> Vec<String> {
-        self.chosen.get().iter().map(|id| id.to_string()).collect()
+        let mut chosen: Vec<String> = self.chosen.get().iter().map(|id| id.to_string()).collect();
+        chosen.sort();
+        chosen
     }
 
     fn options(&self) -> Vec<(String, Option<telar::Toggle>)> {
@@ -541,9 +549,9 @@ fn statuses(tree: &ComponentList) -> Vec<String> {
 fn an_empty_list_says_so_until_its_rows_arrive() {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let items = signal(Vec::<ListRow>::new());
+    let items = signal(Vec::<Entry>::new());
     let item = virtual_list(
-        VirtualListProps::props()
+        VirtualListProps::<Arc<str>>::props()
             .items(Reactive::of(move || items.get()))
             .label("Fruit")
             .build(),
@@ -573,7 +581,7 @@ fn an_empty_list_shows_its_own_words_or_its_empty_state() {
     crate::test_support::fresh_layout_runtime();
     let words = telar::testing::scoped(|| {
         let words = virtual_list(
-            VirtualListProps::props()
+            VirtualListProps::<Arc<str>>::props()
                 .empty_label("No fruit yet")
                 .build(),
         )
@@ -587,7 +595,7 @@ fn an_empty_list_shows_its_own_words_or_its_empty_state() {
     crate::test_support::fresh_layout_runtime();
     let built = telar::testing::scoped(|| {
         let built = virtual_list(
-            VirtualListProps::props()
+            VirtualListProps::<Arc<str>>::props()
                 .empty_label("Unused")
                 .empty(Children::one(|| {
                     let text =
@@ -603,22 +611,22 @@ fn an_empty_list_shows_its_own_words_or_its_empty_state() {
     assert_eq!(statuses(&built), ["Add a fruit"]);
 }
 
-fn wordy(count: usize) -> Vec<ListRow> {
+fn wordy(count: usize) -> Vec<Entry> {
     (0..count)
         .map(|i| {
             let label = match i % 3 {
                 0 => format!("Row {i:03}"),
                 _ => format!("Row {i:03} has a label long enough to run onto more lines than one"),
             };
-            ListRow::new(format!("row-{i}"), label)
+            entry(format!("row-{i}"), label)
         })
         .collect()
 }
 
-fn long(count: usize) -> Vec<ListRow> {
+fn long(count: usize) -> Vec<Entry> {
     (0..count)
         .map(|i| {
-            ListRow::new(
+            entry(
                 format!("row-{i}"),
                 format!("Row {i:03} has a label long enough to run onto a second line"),
             )
@@ -696,10 +704,10 @@ fn a_wrapping_list_grows_a_row_to_hold_its_label_and_leaves_a_short_one_a_row_ta
 fn a_row_builder_s_lines_are_given_the_height_they_ask_for_in_a_wrapping_list() {
     crate::test_support::fresh_layout_runtime();
     let item = virtual_list(
-        VirtualListProps::props()
+        VirtualListProps::<Arc<str>>::props()
             .items(fruit())
             .wrap(true)
-            .row(Rc::new(|row: &ListRow| {
+            .row(Rc::new(|row: &Entry| {
                 let (name, detail) = (row.label.clone(), format!("{} in stock", row.id));
                 let lines = vec![
                     box_item(Text::declaring(
@@ -883,7 +891,7 @@ fn the_rows_stand_at_the_list_s_size() {
     for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
         crate::test_support::fresh_layout_runtime();
         let item = virtual_list(
-            VirtualListProps::props()
+            VirtualListProps::<Arc<str>>::props()
                 .items(fruit())
                 .label("Fruit")
                 .size(size)

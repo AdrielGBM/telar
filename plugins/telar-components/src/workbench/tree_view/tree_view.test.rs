@@ -1,8 +1,14 @@
 use std::cell::RefCell;
 use std::num::NonZeroU32;
 
-use telar::testing::{key_with, lay_out, named, press, release, route};
-use telar::{ComponentList, DrawCommand, Event, Rect, relayout_if_dirty};
+use std::time::Duration;
+
+use telar::testing::{advance_time, key_with, lay_out, moved, named, press, release, route};
+use telar::{
+    ComponentList, DragItem, DragSession, DrawCommand, Event, Rect, relayout_if_dirty,
+};
+
+use super::super::tree_drag::{TreeDrag, TreeTarget};
 
 use super::*;
 
@@ -22,17 +28,24 @@ fn caret_width() -> f32 {
     crate::shared::icon_size(telar::ControlSize::Regular)
 }
 
-fn catalogue() -> Vec<TreeNode> {
+type Node = TreeNode<Arc<str>>;
+type Builder = TreeViewPropsBuilder<Arc<str>>;
+
+fn node(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Node {
+    TreeNode::new(id.into(), label)
+}
+
+fn catalogue() -> Vec<Node> {
     vec![
-        TreeNode::new("inputs", "Inputs").with_children([
-            TreeNode::new("button", "Button").with_children([
-                TreeNode::new("button/primary", "Primary"),
-                TreeNode::new("button/ghost", "Ghost"),
+        node("inputs", "Inputs").with_children([
+            node("button", "Button").with_children([
+                node("button/primary", "Primary"),
+                node("button/ghost", "Ghost"),
             ]),
-            TreeNode::new("checkbox", "Checkbox").with_badge("new"),
+            node("checkbox", "Checkbox").with_badge("new"),
         ]),
-        TreeNode::new("layout", "Layout").with_children([TreeNode::new("stack", "Stack")]),
-        TreeNode::new("about", "About"),
+        node("layout", "Layout").with_children([node("stack", "Stack")]),
+        node("about", "About"),
     ]
 }
 
@@ -41,25 +54,29 @@ struct Mounted {
     selected: RwSignal<Option<Arc<str>>>,
     expanded: RwSignal<HashSet<Arc<str>>>,
     picked: Rc<RefCell<Vec<String>>>,
-    asked: Rc<RefCell<Vec<TreeContext>>>,
+    asked: Rc<RefCell<Vec<TreeContext<Arc<str>>>>>,
 }
 
 impl Mounted {
-    fn new(items: Vec<TreeNode>, height: f32) -> Self {
+    fn new(items: Vec<Node>, height: f32) -> Self {
         Self::build(items, height, true)
     }
 
-    fn build(items: Vec<TreeNode>, height: f32, select_branches: bool) -> Self {
+    fn build(items: Vec<Node>, height: f32, select_branches: bool) -> Self {
         Self::mount(items, height, select_branches, false)
     }
 
-    fn wrapping(items: Vec<TreeNode>, height: f32) -> Self {
+    fn wrapping(items: Vec<Node>, height: f32) -> Self {
         let mut mounted = Self::mount(items, height, true, true);
         mounted.settle();
         mounted
     }
 
-    fn mount(items: Vec<TreeNode>, height: f32, select_branches: bool, wrap: bool) -> Self {
+    fn mount(items: Vec<Node>, height: f32, select_branches: bool, wrap: bool) -> Self {
+        Self::shaped(items, height, |props| props.select_branches(select_branches).wrap(wrap))
+    }
+
+    fn shaped(items: Vec<Node>, height: f32, shape: impl FnOnce(Builder) -> Builder) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::testing::reset_keyboard();
         focus::clear();
@@ -69,18 +86,15 @@ impl Mounted {
         let sink = picked.clone();
         let asked = Rc::new(RefCell::new(Vec::new()));
         let asking = asked.clone();
-        let item = tree_view(
+        let item = tree_view(shape(
             TreeViewProps::props()
                 .items(items)
                 .selected(selected)
                 .expanded(expanded)
                 .on_select(move |node| sink.borrow_mut().push(node.id.to_string()))
                 .on_context(move |context| asking.borrow_mut().push(context))
-                .label("Components")
-                .select_branches(select_branches)
-                .wrap(wrap)
-                .build(),
-        )
+                .label("Components"),
+        ).build())
         .unwrap();
         lay_out(item.layout_node(), 240.0, height);
         let tree = ComponentList::new(item);
@@ -94,7 +108,7 @@ impl Mounted {
         }
     }
 
-    fn focused(items: Vec<TreeNode>) -> Self {
+    fn focused(items: Vec<Node>) -> Self {
         let mounted = Self::new(items, 400.0);
         focus_newest_tree();
         mounted
@@ -159,7 +173,7 @@ impl Mounted {
     }
 }
 
-fn ids(flat: &Flat) -> Vec<&str> {
+fn ids(flat: &Flat<Arc<str>>) -> Vec<&str> {
     flat.0.iter().map(|row| &*row.node.id).collect()
 }
 
@@ -331,9 +345,9 @@ fn typing_moves_to_the_visible_row_whose_name_it_starts() {
 #[test]
 fn a_space_inside_a_query_is_a_character_not_a_selection() {
     let items = vec![
-        TreeNode::new("set-a", "Set A"),
-        TreeNode::new("set-b", "Set B"),
-        TreeNode::new("settings", "Settings"),
+        node("set-a", "Set A"),
+        node("set-b", "Set B"),
+        node("settings", "Settings"),
     ];
     let mut tree = Mounted::focused(items);
     for c in "set".chars() {
@@ -551,11 +565,11 @@ fn every_row_says_it_is_a_tree_item_selected_open_and_where_it_sits() {
     assert_eq!(rows.len(), 5, "one entry per visible row: {rows:?}");
 }
 
-fn forest(groups: usize, leaves: usize) -> Vec<TreeNode> {
+fn forest(groups: usize, leaves: usize) -> Vec<Node> {
     (0..groups)
         .map(|g| {
-            TreeNode::new(format!("group {g}"), format!("Group {g}")).with_children(
-                (0..leaves).map(|l| TreeNode::new(format!("{g}/{l}"), format!("Node {g}/{l}"))),
+            node(format!("group {g}"), format!("Group {g}")).with_children(
+                (0..leaves).map(|l| node(format!("{g}/{l}"), format!("Node {g}/{l}"))),
             )
         })
         .collect()
@@ -733,22 +747,22 @@ fn a_tree_s_rows_are_as_tall_as_every_other_list_s() {
     drop(tree);
 }
 
-fn wordy(count: usize) -> Vec<TreeNode> {
+fn wordy(count: usize) -> Vec<Node> {
     (0..count)
         .map(|i| {
             let label = match i % 3 {
                 0 => format!("Node {i:03}"),
                 _ => format!("Node {i:03} has a name long enough to run onto more lines than one"),
             };
-            TreeNode::new(format!("n{i}"), label)
+            node(format!("n{i}"), label)
         })
         .collect()
 }
 
-fn long(count: usize) -> Vec<TreeNode> {
+fn long(count: usize) -> Vec<Node> {
     (0..count)
         .map(|i| {
-            TreeNode::new(
+            node(
                 format!("n{i}"),
                 format!("Node {i:03} has a name long enough to run onto a second line"),
             )
@@ -1061,4 +1075,425 @@ fn an_empty_tree_wears_the_ring_itself_while_the_keyboard_is_on_it() {
 fn a_tree_with_rows_rings_the_cursor_s_row_and_not_itself() {
     let tree = Mounted::focused(catalogue());
     assert_eq!(ringed(&tree), [pointed(&tree).expect("a cursor row")]);
+}
+
+#[test]
+fn a_branch_with_nothing_under_it_is_still_a_branch() {
+    let mut tree = Mounted::focused(vec![
+        node("empty", "Empty folder").with_children([]),
+        node("note", "Note"),
+    ]);
+    let empty = |tree: &Mounted| {
+        telar::inspect::snapshot(&tree.tree.commands())
+            .into_iter()
+            .find(|row| row.role == Role::TreeItem && row.name == "Empty folder")
+            .expect("the empty branch is shown")
+    };
+    assert!(empty(&tree).expanded == Some(false), "it says it is shut");
+    tree.key(NamedKey::ArrowRight);
+    assert_eq!(tree.open(), ["empty"]);
+    assert!(empty(&tree).expanded == Some(true), "and opens, showing nothing");
+    tree.key(NamedKey::ArrowRight);
+    tree.key(NamedKey::Enter);
+    assert_eq!(
+        tree.selected().as_deref(),
+        Some("empty"),
+        "right on an open branch with nothing in it stays on it"
+    );
+}
+
+#[test]
+fn what_leading_builds_stands_before_each_row_s_label() {
+    let tree = Mounted::shaped(catalogue(), 400.0, |props| {
+        props.leading(Rc::new(|node: &Node| {
+            let mark = match node.is_branch() {
+                true => "▸",
+                false => "·",
+            };
+            Ok(box_item(Text::declaring(
+                move || mark.to_string(),
+                LayoutStyle::new(),
+                |text| text,
+            )?))
+        }))
+    });
+    assert_eq!(
+        tree.drawn(),
+        ["▸", "Inputs", "▸", "Layout", "·", "About"],
+        "an icon per row, before its label"
+    );
+}
+
+type Heard = Rc<RefCell<Vec<(Key, Option<String>)>>>;
+
+/// A focused tree whose app takes F2 and nothing else, recording every key it is asked about with the node the keyboard was on.
+fn commanded() -> (Mounted, Heard) {
+    let heard = Heard::default();
+    let hearing = heard.clone();
+    let tree = Mounted::shaped(catalogue(), 400.0, move |props| {
+        props.on_key(Rc::new(move |key: &Key, node: Option<&Node>| {
+            hearing
+                .borrow_mut()
+                .push((key.clone(), node.map(|node| node.id.to_string())));
+            *key == Key::Named(NamedKey::F2)
+        }))
+    });
+    focus_newest_tree();
+    (tree, heard)
+}
+
+#[test]
+fn the_app_hears_each_key_first_with_the_node_the_keyboard_is_on() {
+    let (mut tree, heard) = commanded();
+    tree.key(NamedKey::F2);
+    tree.key(NamedKey::ArrowDown);
+    tree.key(NamedKey::F2);
+    assert_eq!(
+        *heard.borrow(),
+        [
+            (Key::Named(NamedKey::F2), Some("inputs".to_string())),
+            (Key::Named(NamedKey::ArrowDown), Some("inputs".to_string())),
+            (Key::Named(NamedKey::F2), Some("layout".to_string())),
+        ],
+        "a key the app leaves is the tree's: the arrow moved the cursor"
+    );
+}
+
+#[test]
+fn an_arrow_with_a_modifier_held_is_never_the_tree_s() {
+    let (mut tree, heard) = commanded();
+    for key in [NamedKey::ArrowDown, NamedKey::ArrowRight, NamedKey::End] {
+        tree.send(key_with(Key::Named(key), telar::testing::hold(false, true)));
+    }
+    telar::testing::hold(false, false);
+    tree.key(NamedKey::F2);
+    assert_eq!(
+        heard.borrow().last(),
+        Some(&(Key::Named(NamedKey::F2), Some("inputs".to_string()))),
+        "Alt and the arrows moved nothing"
+    );
+    assert!(tree.open().is_empty(), "and opened nothing");
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Carried {
+    Node(Arc<str>),
+    Sentence(u32),
+}
+
+type Drops = Rc<RefCell<Vec<(Carried, TreeTarget<Arc<str>>)>>>;
+
+/// A tree `height` tall whose rows are carried as [`Carried::Node`], over a 40px box below it that carries `Sentence(7)`, both in one session, with the drops the tree reports.
+struct Dragged {
+    tree: ComponentList,
+    expanded: RwSignal<HashSet<Arc<str>>>,
+    drops: Drops,
+    session: DragSession<Carried>,
+    height: f32,
+}
+
+fn dragged(
+    items: Vec<Node>,
+    height: f32,
+    accepts: impl Fn(&Carried, &TreeTarget<Arc<str>>) -> bool + 'static,
+) -> Dragged {
+    crate::test_support::fresh_layout_runtime();
+    telar::testing::reset_keyboard();
+    focus::clear();
+    let items = signal(items);
+    let expanded = signal(HashSet::new());
+    let drops = Drops::default();
+    let session = DragSession::new();
+    let dropping = drops.clone();
+    let drag = TreeDrag::new(
+        &session,
+        |node: &Node| Some(Carried::Node(node.id.clone())),
+        accepts,
+        move |payload, target| dropping.borrow_mut().push((payload, target)),
+    );
+    let tree = tree_view(
+        TreeViewProps::props()
+            .items(Reactive::of(move || items.get()))
+            .expanded(expanded)
+            .drag(drag)
+            .label("Library")
+            .build(),
+    )
+    .unwrap();
+    let source = session.item(
+        StyledContainer::new(
+            LayoutStyle::new().width(240.0).height(40.0),
+            |_| RectStyle::default(),
+            vec![],
+        )
+        .unwrap(),
+        DragItem::new(|| Some(Carried::Sentence(7))).threshold(0.0),
+    );
+    let column = Container::new(
+        LayoutStyle::column().width(240.0),
+        vec![
+            box_item(Container::new(LayoutStyle::column().height(height), vec![tree]).unwrap()),
+            box_item(source),
+        ],
+    )
+    .unwrap();
+    let node = column.layout_node();
+    let tree = ComponentList::new(box_item(column));
+    lay_out(node, 240.0, height + 40.0);
+    let _ = tree.commands();
+    Dragged {
+        tree,
+        expanded,
+        drops,
+        session,
+        height,
+    }
+}
+
+fn anything(_: &Carried, _: &TreeTarget<Arc<str>>) -> bool {
+    true
+}
+
+const X: f64 = 120.0;
+
+/// Where on row `index` the pointer is, `along` of the way down it.
+fn on_row(index: usize, along: f32) -> f64 {
+    ((index as f32 + along) * row_height()) as f64
+}
+
+impl Dragged {
+    fn send(&mut self, event: Event) {
+        route(&mut self.tree, &event);
+        self.settle();
+    }
+
+    fn settle(&mut self) {
+        for _ in 0..4 {
+            relayout_if_dirty();
+            let _ = self.tree.commands();
+        }
+    }
+
+    /// Presses at `from`, carries the payload past the drag threshold and on to `to`, and holds it there.
+    fn carry(&mut self, from: f64, to: f64) {
+        self.send(press(X, from));
+        self.send(moved(X, from + 8.0));
+        self.send(moved(X, to));
+    }
+
+    fn drag(&mut self, from: f64, to: f64) {
+        self.carry(from, to);
+        self.send(release(X, to));
+    }
+
+    fn below(&self) -> f64 {
+        (self.height + 20.0) as f64
+    }
+
+    fn drops(&self) -> Vec<(Carried, TreeTarget<Arc<str>>)> {
+        self.drops.borrow().clone()
+    }
+}
+
+fn key(id: &str) -> Option<Arc<str>> {
+    Some(Arc::from(id))
+}
+
+#[test]
+fn a_row_dropped_between_two_others_lands_among_their_siblings() {
+    let mut tree = dragged(catalogue(), 400.0, anything);
+    tree.drag(on_row(2, 0.5), on_row(1, 0.1));
+    assert_eq!(
+        tree.drops(),
+        [(
+            Carried::Node(Arc::from("about")),
+            TreeTarget::Between {
+                parent: None,
+                after: key("inputs"),
+                before: key("layout"),
+            }
+        )]
+    );
+}
+
+/// Rows go into the catalogue's branches and never onto a leaf: what an app whose rows are folders and files says.
+fn into_branches(_: &Carried, target: &TreeTarget<Arc<str>>) -> bool {
+    match target {
+        TreeTarget::Inside(node) => ["inputs", "button", "layout"].contains(&&**node),
+        TreeTarget::Between { .. } => true,
+    }
+}
+
+#[test]
+fn a_row_dropped_onto_a_node_the_app_takes_it_into_lands_inside_it() {
+    let mut tree = dragged(catalogue(), 400.0, into_branches);
+    tree.drag(on_row(2, 0.5), on_row(1, 0.5));
+    tree.drag(on_row(1, 0.5), on_row(2, 0.6));
+    assert_eq!(
+        tree.drops(),
+        [
+            (
+                Carried::Node(Arc::from("about")),
+                TreeTarget::Inside(Arc::from("layout"))
+            ),
+            (
+                Carried::Node(Arc::from("layout")),
+                TreeTarget::Between {
+                    parent: None,
+                    after: key("about"),
+                    before: None,
+                }
+            ),
+        ],
+        "past the middle of a node that takes nothing onto it is the gap after it"
+    );
+}
+
+#[test]
+fn an_empty_branch_takes_a_row_dropped_into_it() {
+    let mut tree = dragged(
+        vec![node("empty", "Empty").with_children([]), node("note", "Note")],
+        400.0,
+        anything,
+    );
+    tree.drag(on_row(1, 0.5), on_row(0, 0.5));
+    assert_eq!(
+        tree.drops(),
+        [(
+            Carried::Node(Arc::from("note")),
+            TreeTarget::Inside(Arc::from("empty"))
+        )]
+    );
+}
+
+#[test]
+fn a_branch_is_never_dropped_into_itself_nor_put_back_where_it_was() {
+    let mut tree = dragged(catalogue(), 400.0, anything);
+    tree.expanded.set([Arc::from("inputs")].into_iter().collect());
+    tree.settle();
+    tree.drag(on_row(0, 0.5), on_row(1, 0.5));
+    tree.drag(on_row(0, 0.5), on_row(2, 0.1));
+    tree.drag(on_row(4, 0.5), on_row(4, 0.9));
+    assert!(
+        tree.drops().is_empty(),
+        "into a branch under it, among what it holds, or beside itself: {:?}",
+        tree.drops()
+    );
+}
+
+#[test]
+fn held_over_a_shut_branch_the_pointer_opens_it() {
+    let mut tree = dragged(catalogue(), 400.0, anything);
+    tree.carry(on_row(2, 0.5), on_row(1, 0.5));
+    advance_time(Duration::from_millis(300));
+    assert!(tree.expanded.get().is_empty(), "not before the hold delay");
+    advance_time(Duration::from_millis(600));
+    tree.settle();
+    assert_eq!(
+        tree.expanded.get(),
+        [Arc::from("layout")].into_iter().collect()
+    );
+    tree.send(release(X, on_row(1, 0.5)));
+    assert_eq!(
+        tree.drops(),
+        [(
+            Carried::Node(Arc::from("about")),
+            TreeTarget::Inside(Arc::from("layout"))
+        )]
+    );
+}
+
+/// Before `inputs` opens, the lower half of its row is the gap before `layout`, at the top level; once it opens under a pointer that does not move, the same gap is the first among what `inputs` holds, which this app refuses.
+#[test]
+fn a_branch_opened_under_a_still_pointer_is_measured_again() {
+    let mut tree = dragged(catalogue(), 400.0, |_, target| match target {
+        TreeTarget::Inside(_) => false,
+        TreeTarget::Between { parent, .. } => parent.as_deref() != Some("inputs"),
+    });
+    tree.carry(on_row(2, 0.5), on_row(0, 0.85));
+    assert!(tree.session.over().is_some(), "the gap before `layout`");
+    advance_time(Duration::from_millis(800));
+    tree.settle();
+    assert!(tree.expanded.get().contains("inputs"));
+    assert_eq!(
+        tree.session.over(),
+        None,
+        "the gap now lands among what `inputs` holds"
+    );
+    tree.send(release(X, on_row(0, 0.85)));
+    assert!(tree.drops().is_empty());
+}
+
+/// A sentence from a list beside the tree lands on `about`, a leaf, as a sentence lands on a section of a text, and nowhere else.
+#[test]
+fn a_payload_from_another_widget_lands_on_the_node_the_app_accepts_it_on() {
+    let mut tree = dragged(catalogue(), 400.0, |payload, target| {
+        matches!(
+            (payload, target),
+            (Carried::Sentence(_), TreeTarget::Inside(node)) if &**node == "about"
+        )
+    });
+    let below = tree.below();
+    tree.carry(below, on_row(1, 0.5));
+    assert_eq!(tree.session.over(), None, "`layout` takes no sentence");
+    tree.send(moved(X, on_row(2, 0.5)));
+    tree.send(release(X, on_row(2, 0.5)));
+    assert_eq!(
+        tree.drops(),
+        [(Carried::Sentence(7), TreeTarget::Inside(Arc::from("about")))]
+    );
+}
+
+#[test]
+fn escape_mid_drag_drops_nothing() {
+    let mut tree = dragged(catalogue(), 400.0, anything);
+    tree.carry(on_row(2, 0.5), on_row(1, 0.5));
+    tree.send(named(NamedKey::Escape));
+    assert_eq!(tree.session.carried(), None);
+    tree.send(moved(X, on_row(0, 0.5)));
+    tree.send(release(X, on_row(0, 0.5)));
+    assert!(tree.drops().is_empty());
+}
+
+fn names_built(tree: &ComponentList) -> Vec<String> {
+    telar::inspect::snapshot(&tree.commands())
+        .into_iter()
+        .filter(|node| node.role == Role::TreeItem)
+        .map(|node| node.name)
+        .collect()
+}
+
+/// The row picked up scrolls out of the rows built while the list scrolls under the pointer, and the stroke goes on without it.
+#[test]
+fn a_row_carried_past_the_rows_built_is_still_dropped() {
+    let rows: Vec<Node> = (0..200)
+        .map(|i| node(format!("row {i}"), format!("Row {i}")))
+        .collect();
+    let height = row_height() * 10.0;
+    let mut tree = dragged(rows, height, |_, target| {
+        matches!(target, TreeTarget::Between { .. })
+    });
+    tree.carry(on_row(0, 0.5), (height - 2.0) as f64);
+    for _ in 0..40 {
+        advance_time(Duration::from_millis(50));
+        tree.settle();
+    }
+    assert!(
+        !names_built(&tree.tree).contains(&"Row 0".to_string()),
+        "the row picked up is no longer built"
+    );
+    assert_eq!(tree.session.carried(), Some(Carried::Node(Arc::from("row 0"))));
+    tree.send(release(X, (height - 2.0) as f64));
+    let drops = tree.drops();
+    assert_eq!(drops.len(), 1, "{drops:?}");
+    let (payload, TreeTarget::Between { after, .. }) = &drops[0] else {
+        panic!("dropped between two rows: {drops:?}");
+    };
+    assert_eq!(*payload, Carried::Node(Arc::from("row 0")));
+    let after: usize = after
+        .as_deref()
+        .and_then(|after| after.strip_prefix("row "))
+        .and_then(|n| n.parse().ok())
+        .expect("after a row");
+    assert!(after > 20, "landed past what was in view at the press: row {after}");
 }

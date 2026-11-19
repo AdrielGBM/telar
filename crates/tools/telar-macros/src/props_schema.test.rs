@@ -174,16 +174,36 @@ fn an_unknown_prop_attribute_lists_the_known_ones() {
 }
 
 #[test]
-fn a_generic_props_struct_is_refused() {
-    for source in [
-        "struct P<T> { value: T }",
-        "struct P<'a> { value: &'a str }",
+fn a_props_struct_takes_type_parameters_without_defaults_only() {
+    for (source, says) in [
+        ("struct P<'a> { value: &'a str }", "type parameters only"),
+        (
+            "struct P<const N: usize> { value: [u8; N] }",
+            "type parameters only",
+        ),
+        ("struct P<T = u8> { value: T }", "takes no default"),
     ] {
-        let error = expand_str(source).expect_err("generic props").to_string();
-        assert!(error.contains("no generic parameters"), "{source}: {error}");
+        let error = expand_str(source).expect_err("refused").to_string();
+        assert!(error.contains(says), "{source}: {error}");
     }
 }
 
+#[test]
+fn a_prop_whose_type_names_a_parameter_is_shown_read_only() {
+    let schema = schema_of("struct P<K: Clone> { key: Option<K>, #[props(default)] count: u32 }");
+    assert!(
+        schema.contains("HasPropsSchema for P < K >"),
+        "one schema for every instance: {schema}"
+    );
+    assert!(
+        schema.contains("PropField :: new (\"key\" , \"Option<K>\" , { fn control () -> :: telar :: preview :: ControlKind { :: telar :: preview :: ControlKind :: ReadOnly }"),
+        "{schema}"
+    );
+    assert!(
+        schema.contains(":: telar :: __preview_control ! (u32)"),
+        "a prop of a concrete type keeps its probed control: {schema}"
+    );
+}
 #[test]
 fn a_prop_named_after_a_key_the_call_keeps_is_refused() {
     for (source, key, does) in [

@@ -17,7 +17,7 @@ use crate::workbench::workbench_fill;
 /// Where the menu was asked for, and the row it is about: `None` for the space under the rows.
 #[derive(Clone)]
 struct Asked {
-    node: Option<TreeNode>,
+    node: Option<TreeNode<Arc<str>>>,
     place: MenuPlace,
 }
 
@@ -41,7 +41,7 @@ impl Command {
 }
 
 /// The rows the menu shows for `node`, in order, `None` standing for a separator: a branch's own first, then the whole tree's.
-pub(crate) fn commands(node: Option<&TreeNode>) -> Vec<Option<Command>> {
+pub(crate) fn commands(node: Option<&TreeNode<Arc<str>>>) -> Vec<Option<Command>> {
     let mut rows = match node {
         Some(branch) if branch.is_branch() => {
             vec![Some(Command::Expand), Some(Command::Collapse), None]
@@ -55,13 +55,16 @@ pub(crate) fn commands(node: Option<&TreeNode>) -> Vec<Option<Command>> {
 /// The menu over a tree of `items` whose open branches `expanded` holds.
 #[derive(Clone, Copy)]
 pub(super) struct TreeMenu {
-    items: Memo<Vec<TreeNode>>,
+    items: Memo<Vec<TreeNode<Arc<str>>>>,
     expanded: RwSignal<HashSet<Arc<str>>>,
     asked: RwSignal<Option<Asked>>,
 }
 
 impl TreeMenu {
-    pub(super) fn new(items: Memo<Vec<TreeNode>>, expanded: RwSignal<HashSet<Arc<str>>>) -> Self {
+    pub(super) fn new(
+        items: Memo<Vec<TreeNode<Arc<str>>>>,
+        expanded: RwSignal<HashSet<Arc<str>>>,
+    ) -> Self {
         Self {
             items,
             expanded,
@@ -70,7 +73,7 @@ impl TreeMenu {
     }
 
     /// What the tree calls when a row asks for its menu.
-    pub(super) fn on_context(self) -> impl Fn(TreeContext) + 'static {
+    pub(super) fn on_context(self) -> impl Fn(TreeContext<Arc<str>>) + 'static {
         move |context| {
             self.asked.set(Some(Asked {
                 place: context.place(),
@@ -79,7 +82,7 @@ impl TreeMenu {
         }
     }
 
-    pub(crate) fn run(self, command: Command, node: Option<&TreeNode>) {
+    pub(crate) fn run(self, command: Command, node: Option<&TreeNode<Arc<str>>>) {
         match command {
             Command::Expand => {
                 let under = node.map(within).unwrap_or_default();
@@ -127,7 +130,7 @@ impl TreeMenu {
         )
     }
 
-    fn rows(self, node: Option<TreeNode>) -> Children {
+    fn rows(self, node: Option<TreeNode<Arc<str>>>) -> Children {
         Children::new(move || {
             let mut rows = Vec::new();
             for command in commands(node.as_ref()) {
@@ -150,8 +153,19 @@ impl TreeMenu {
     }
 }
 
+/// `node` holding `children`: a branch where there are any, and the leaf it was where there are none, since an element, a reader's node, holds nothing more to open once it has nothing under it.
+pub(super) fn with_any(
+    node: TreeNode<Arc<str>>,
+    children: Vec<TreeNode<Arc<str>>>,
+) -> TreeNode<Arc<str>> {
+    match children.is_empty() {
+        true => node,
+        false => node.with_children(children),
+    }
+}
+
 /// `branch` and every branch under it.
-fn within(branch: &TreeNode) -> Vec<Arc<str>> {
+fn within(branch: &TreeNode<Arc<str>>) -> Vec<Arc<str>> {
     TreeNode::branch_ids(std::slice::from_ref(branch))
 }
 

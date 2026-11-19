@@ -198,12 +198,21 @@ pub fn doc_of(attrs: &[Attribute]) -> TokenStream2 {
 }
 
 /// Emits `impl HasPropsSchema`, wrapped in `telar::__previews!` so a build without previews carries none of it.
-pub fn expand(name: &Ident, doc: &TokenStream2, props: &[Prop]) -> TokenStream2 {
+///
+/// One schema serves every instance of a generic props struct: it is a static, which cannot name the struct's parameters, so a prop whose type does is shown read-only.
+pub fn expand(
+    name: &Ident,
+    generics: &syn::Generics,
+    doc: &TokenStream2,
+    props: &[Prop],
+) -> TokenStream2 {
     let name_text = name.unraw().to_string();
-    let fields = props.iter().map(field);
+    let params: Vec<&Ident> = generics.type_params().map(|param| &param.ident).collect();
+    let fields = props.iter().map(|prop| field(prop, &params));
+    let (declared, named, where_clause) = generics.split_for_impl();
     quote! {
         ::telar::__previews! {
-            impl ::telar::preview::HasPropsSchema for #name {
+            impl #declared ::telar::preview::HasPropsSchema for #name #named #where_clause {
                 fn schema() -> &'static ::telar::preview::PropsSchema {
                     static SCHEMA: ::telar::preview::PropsSchema =
                         ::telar::preview::PropsSchema::new(#name_text, #doc).fields(&[#(#fields),*]);
@@ -214,15 +223,28 @@ pub fn expand(name: &Ident, doc: &TokenStream2, props: &[Prop]) -> TokenStream2 
     }
 }
 
-fn field(prop: &Prop) -> TokenStream2 {
+/// Whether `tokens` name any of `params` anywhere inside them.
+fn names_any(tokens: TokenStream2, params: &[&Ident]) -> bool {
+    tokens.into_iter().any(|token| match token {
+        proc_macro2::TokenTree::Ident(ident) => params.iter().any(|param| **param == ident),
+        proc_macro2::TokenTree::Group(group) => names_any(group.stream(), params),
+        _ => false,
+    })
+}
+
+fn field(prop: &Prop, params: &[&Ident]) -> TokenStream2 {
     let name = prop.name.unraw().to_string();
     let ty = &prop.ty;
     let ty_text = type_text(ty);
     let doc = &prop.doc;
-    let probed = quote! { ::telar::__preview_control!(#ty) };
+    let read_only = quote! { ::telar::preview::ControlKind::ReadOnly };
+    let probed = match names_any(ty.to_token_stream(), params) {
+        true => read_only.clone(),
+        false => quote! { ::telar::__preview_control!(#ty) },
+    };
     let control = match &prop.control {
         None => probed,
-        Some(Control::ReadOnly) => quote! { ::telar::preview::ControlKind::ReadOnly },
+        Some(Control::ReadOnly) => read_only,
         Some(Control::Refine(refinements)) => quote! {
             static INNER: ::std::sync::OnceLock<::telar::preview::ControlKind> = ::std::sync::OnceLock::new();
             ::telar::preview::__probe::refine(#probed, &INNER, |control| control #(#refinements)*)

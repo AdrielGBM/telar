@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::num::NonZeroU32;
 
 use telar::testing::{centre, lay_out, named, press, release, route};
@@ -9,7 +9,13 @@ use telar::{AccessNode, ComponentList, Event, Rect, relayout_if_dirty};
 
 use super::*;
 
-fn columns() -> Vec<Column> {
+type Row = TableRow<Arc<str>>;
+
+fn table_row<C: Into<Arc<str>>>(id: impl Into<Arc<str>>, cells: impl IntoIterator<Item = C>) -> Row {
+    TableRow::new(id.into(), cells)
+}
+
+fn columns() -> Vec<Column<Arc<str>>> {
     vec![
         Column::new("name", "Name").sortable(true),
         Column::new("size", "Size")
@@ -20,18 +26,18 @@ fn columns() -> Vec<Column> {
     ]
 }
 
-fn files() -> Vec<TableRow> {
+fn files() -> Vec<Row> {
     vec![
-        TableRow::new("b", ["beta.txt", "12", "Text"]),
-        TableRow::new("a", ["Alpha.rs", "9", "Rust"]),
-        TableRow::new("c", ["gamma.png", "100", "Image"]),
+        table_row("b", ["beta.txt", "12", "Text"]),
+        table_row("a", ["Alpha.rs", "9", "Rust"]),
+        table_row("c", ["gamma.png", "100", "Image"]),
     ]
 }
 
-fn many(count: usize) -> Vec<TableRow> {
+fn many(count: usize) -> Vec<Row> {
     (0..count)
         .map(|i| {
-            TableRow::new(
+            table_row(
                 format!("r{i}"),
                 [format!("Row {i}"), i.to_string(), "x".into()],
             )
@@ -47,15 +53,15 @@ struct Mounted {
 }
 
 impl Mounted {
-    fn new(rows: Vec<TableRow>, height: f32) -> Self {
+    fn new(rows: Vec<Row>, height: f32) -> Self {
         Self::build(rows, height, true)
     }
 
-    fn build(rows: Vec<TableRow>, height: f32, sort_rows: bool) -> Self {
+    fn build(rows: Vec<Row>, height: f32, sort_rows: bool) -> Self {
         Self::mount(rows, height, sort_rows, columns())
     }
 
-    fn wrapping(rows: Vec<TableRow>, height: f32) -> Self {
+    fn wrapping(rows: Vec<Row>, height: f32) -> Self {
         let mut columns = columns();
         columns[0] = columns[0].clone().wrap(true);
         let mut mounted = Self::mount(rows, height, true, columns);
@@ -63,7 +69,7 @@ impl Mounted {
         mounted
     }
 
-    fn mount(rows: Vec<TableRow>, height: f32, sort_rows: bool, columns: Vec<Column>) -> Self {
+    fn mount(rows: Vec<Row>, height: f32, sort_rows: bool, columns: Vec<Column<Arc<str>>>) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::focus::clear();
         let sort = signal(None);
@@ -101,7 +107,7 @@ impl Mounted {
         mounted
     }
 
-    fn focused(rows: Vec<TableRow>, height: f32) -> Self {
+    fn focused(rows: Vec<Row>, height: f32) -> Self {
         let mut mounted = Self::new(rows, height);
         let grid = telar::focus::exposed()
             .into_iter()
@@ -385,7 +391,7 @@ struct Grid {
 }
 
 impl Grid {
-    fn mount(props: DataTableProps) -> Self {
+    fn mount(props: DataTableProps<Arc<str>>) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::testing::reset_keyboard();
         telar::focus::clear();
@@ -506,7 +512,7 @@ fn plain() -> telar::ModifiersState {
     telar::ModifiersState::default()
 }
 
-fn resizable_columns() -> Vec<Column> {
+fn resizable_columns() -> Vec<Column<Arc<str>>> {
     vec![
         Column::new("name", "Name")
             .flex(2.0)
@@ -653,12 +659,12 @@ fn bound_widths_lay_the_columns_out_and_hear_every_resize() {
 
 struct Chosen {
     grid: Grid,
-    rows: RwSignal<BTreeSet<Arc<str>>>,
+    rows: RwSignal<HashSet<Arc<str>>>,
     heard: Rc<RefCell<Vec<String>>>,
 }
 
 fn several() -> Chosen {
-    let rows = signal(BTreeSet::new());
+    let rows = signal(HashSet::new());
     let heard = Rc::new(RefCell::new(Vec::new()));
     let (changes, picks) = (heard.clone(), heard.clone());
     let grid = Grid::mount(
@@ -679,7 +685,9 @@ fn several() -> Chosen {
 
 impl Chosen {
     fn chosen(&self) -> Vec<String> {
-        self.rows.get().iter().map(|id| id.to_string()).collect()
+        let mut chosen: Vec<String> = self.rows.get().iter().map(|id| id.to_string()).collect();
+        chosen.sort();
+        chosen
     }
 }
 
@@ -743,7 +751,7 @@ fn space_toggles_shift_with_the_arrows_extends_and_ctrl_a_takes_every_row() {
 
 #[test]
 fn an_empty_table_keeps_its_header_and_says_so_under_it_until_rows_arrive() {
-    let rows = signal(Vec::<TableRow>::new());
+    let rows = signal(Vec::<Row>::new());
     let mut grid = Grid::mount(
         DataTableProps::props()
             .columns(columns())
@@ -793,22 +801,22 @@ fn an_empty_table_shows_its_own_words_or_its_empty_state() {
     assert_eq!(grid.names(Role::Label), ["Drop files here"]);
 }
 
-fn wordy(count: usize) -> Vec<TableRow> {
+fn wordy(count: usize) -> Vec<Row> {
     (0..count)
         .map(|i| {
             let name = match i % 3 {
                 0 => format!("Row {i:03}"),
                 _ => format!("Row {i:03} has a name long enough to run onto more lines than one"),
             };
-            TableRow::new(format!("r{i}"), [name, i.to_string(), "x".into()])
+            table_row(format!("r{i}"), [name, i.to_string(), "x".into()])
         })
         .collect()
 }
 
-fn long(count: usize) -> Vec<TableRow> {
+fn long(count: usize) -> Vec<Row> {
     (0..count)
         .map(|i| {
-            TableRow::new(
+            table_row(
                 format!("r{i}"),
                 [
                     format!("Row {i:03} has a name long enough to wrap"),

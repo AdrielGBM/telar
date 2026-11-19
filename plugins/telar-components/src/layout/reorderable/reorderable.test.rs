@@ -4,7 +4,7 @@ use std::rc::Rc;
 use telar::preview::{Play, PreviewCtx, PreviewEntry, by_role};
 use telar::testing::{hold, lay_out_row, moved, press, release, route};
 use telar::{
-    Component, Key, LayoutItem, LayoutStyle, NamedKey, RectStyle, RwSignal, StyledContainer, Text,
+    Key, LayoutItem, LayoutStyle, NamedKey, RectStyle, RwSignal, StyledContainer, Text,
     box_item, focus::Role, signal,
 };
 
@@ -287,12 +287,14 @@ fn with_a_line_nothing_moves_until_the_drop() {
 #[test]
 fn a_pill_dragged_past_two_centres_lands_after_them() {
     fresh_layout_runtime();
-    let (mut widget, items, moves) = strip();
-    lay_out_row(widget.layout_node(), 400.0, 40.0);
+    let (widget, items, moves) = strip();
+    let node = widget.layout_node();
+    let mut tree = telar::ComponentList::new(widget);
+    lay_out_row(node, 400.0, 40.0);
 
-    widget.on_event(&press(10.0, 20.0));
-    widget.on_event(&moved(260.0, 20.0));
-    widget.on_event(&release(260.0, 20.0));
+    route(&mut tree, &press(10.0, 20.0));
+    route(&mut tree, &moved(260.0, 20.0));
+    route(&mut tree, &release(260.0, 20.0));
 
     assert_eq!(*moves.borrow(), vec![(0, 3)]);
     assert_eq!(items.peek(), vec!['b', 'c', 'a', 'd']);

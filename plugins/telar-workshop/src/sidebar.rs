@@ -5,6 +5,7 @@ mod model;
 
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use telar::focus::{self, Role};
 use telar::preview::PreviewEntry;
@@ -15,7 +16,7 @@ use telar::{
     use_theme_tokens,
 };
 use telar_components::{
-    MenuPlace, SearchFieldProps, TrailingBuilder, TreeNode, TreeViewProps, search_field, tree_view,
+    MenuPlace, SearchFieldProps, TreeNode, TreeRowBuilder, TreeViewProps, search_field, tree_view,
 };
 use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, workbench_muted};
 
@@ -72,7 +73,7 @@ fn badge(_entry: &PreviewEntry) -> Option<String> {
 
 struct Panel {
     state: WorkshopState,
-    items: Memo<Vec<TreeNode>>,
+    items: Memo<Vec<TreeNode<Arc<str>>>>,
     tree: Cell<Option<NodeId>>,
     asked: RwSignal<Option<context::Asked>>,
 }
@@ -132,9 +133,9 @@ impl Panel {
     }
 }
 
-fn first_leaf(nodes: &[TreeNode]) -> Option<&TreeNode> {
+fn first_leaf(nodes: &[TreeNode<Arc<str>>]) -> Option<&TreeNode<Arc<str>>> {
     nodes.iter().find_map(|node| match node.is_branch() {
-        true => first_leaf(&node.children),
+        true => first_leaf(node.child_nodes()),
         false => Some(node),
     })
 }
@@ -221,9 +222,9 @@ fn empty(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 /// Marks each preview a snapshot of which the last test run failed.
-fn drift_badges(state: &WorkshopState) -> TrailingBuilder {
+fn drift_badges(state: &WorkshopState) -> TreeRowBuilder<Arc<str>> {
     let review = state.snapshots().clone();
-    Rc::new(move |node: &TreeNode| drift_badge(&review, &node.id))
+    Rc::new(move |node: &TreeNode<Arc<str>>| drift_badge(&review, &node.id))
 }
 
 fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {

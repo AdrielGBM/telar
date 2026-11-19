@@ -62,7 +62,7 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `#[props(doc = "…")]` — the prop's doc in the workshop, in place of its doc comment.
 /// - `#[props(control = …)]` — `range(min, max)` turns a number field into a slider, `step(step)` sets its increment, `multiline` grows a text field, and those three chain (`range(0, 1).step(0.1)`); they reach through an `Option` to the control it wraps and leave a control they do not fit as it was. `read_only` shows the value without a control.
 ///
-/// A props struct takes no generic parameters, and no field named after a key a component call keeps for itself (`a11y_label`, `lang`, `a11y`, `role`, `slot`, `hover_style` and the other state keys), since a call never hands one to a prop.
+/// A props struct may take type parameters, such as the key a tree names its nodes by, which a call infers from the props it sets; they take no default, and each must admit `()`, the instance a call's placement check reads `IN_FLOW` from. A prop whose type names one is shown read-only in the workshop, since one schema serves every instance. No field is named after a key a component call keeps for itself (`a11y_label`, `lang`, `a11y`, `role`, `slot`, `hover_style` and the other state keys), since a call never hands one to a prop.
 ///
 /// Forgetting a required prop is caught where it was forgotten:
 ///

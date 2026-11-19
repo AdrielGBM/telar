@@ -1,5 +1,4 @@
-use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::collections::HashSet;
 
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
@@ -9,7 +8,7 @@ use crate::layout::virtual_list::virtual_list::{ListRow, VirtualListProps, virtu
 use crate::shared::selection::SelectionMode;
 use telar::ControlSize;
 
-fn contacts() -> Vec<ListRow> {
+fn contacts() -> Vec<ListRow<String>> {
     const FIRST: [&str; 8] = [
         "Ada", "Alan", "Grace", "Edsger", "Barbara", "Donald", "Frances", "Ken",
     ];
@@ -30,7 +29,7 @@ fn contacts() -> Vec<ListRow> {
         .collect()
 }
 
-fn messages() -> Vec<ListRow> {
+fn messages() -> Vec<ListRow<String>> {
     const SAID: [&str; 5] = [
         "Lunch?",
         "The build is green again: the flaky test was waiting on a clock it never started",
@@ -57,12 +56,12 @@ fn framed(list: Box<dyn telar::LayoutItem>) -> Result<Container, LayoutError> {
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
-        preview!(virtual_list: VirtualListProps, "Two thousand rows", |p| {
+        preview!(virtual_list: VirtualListProps<String>, "Two thousand rows", |p| {
             let list = virtual_list(
                 VirtualListProps::props()
                     .on_select(|_| {})
                     .items(contacts())
-                    .selected(signal(Some(Arc::from("contact-2"))))
+                    .selected(signal(Some("contact-2".to_string())))
                     .label(p.arg("label", "Contacts"))
                     .size(p.arg("size", ControlSize::Regular))
                     .given(p.arg("color", None::<Color>), |props, color| props.color(color))
@@ -84,8 +83,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_action("on_select", 2)?;
             canvas.expect_toggled(by_role(Role::Option).named("Ken Dijkstra #1999"), true)
         }),
-        preview!(virtual_list: VirtualListProps, "Several at once", |p| {
-            let chosen = BTreeSet::from([Arc::from("contact-2"), Arc::from("contact-6")]);
+        preview!(virtual_list: VirtualListProps<String>, "Several at once", |p| {
+            let chosen = HashSet::from(["contact-2".to_string(), "contact-6".to_string()]);
             let list = virtual_list(
                 VirtualListProps::props()
                     .on_select(|_| {})
@@ -117,13 +116,13 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_action("on_selection_change", 2)?;
             canvas.expect_action("on_select", 1)
         }),
-        preview!(virtual_list: VirtualListProps, "Wrapped rows", |p| {
+        preview!(virtual_list: VirtualListProps<String>, "Wrapped rows", |p| {
             let list = virtual_list(
                 VirtualListProps::props()
                     .on_select(|_| {})
                     .items(messages())
                     .wrap(p.arg("wrap", true))
-                    .selected(signal(Some(Arc::from("message-1"))))
+                    .selected(signal(Some("message-1".to_string())))
                     .label(p.arg("label", "Messages"))
                     .given(p.arg("color", None::<Color>), |props, color| props.color(color))
                     .build(),
@@ -144,7 +143,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.press(Key::Named(NamedKey::Enter))?;
             canvas.expect_action("on_select", 2)
         }),
-        preview!(virtual_list: VirtualListProps, "Empty", |p| {
+        preview!(virtual_list: VirtualListProps<String>, "Empty", |p| {
             let list = virtual_list(
                 VirtualListProps::props()
                     .label(p.arg("label", "Contacts"))

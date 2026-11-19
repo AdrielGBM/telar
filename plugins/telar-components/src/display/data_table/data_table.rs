@@ -2,7 +2,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, HashSet};
 use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -18,7 +18,7 @@ use telar::{
 };
 
 use crate::shared::rows::{
-    BuiltRows, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
+    BuiltRows, RowKey, RowPlaces, RowState, counted, cursor_ring, row_wash, with_empty_state,
 };
 use crate::shared::selection::{Gesture, RowSelection, SelectionMode};
 use crate::workbench::resizable::resizable::{ResizeEdge, ResizeHandleProps, resize_handle};
@@ -50,23 +50,23 @@ impl DataTableTokens {
     }
 }
 
-/// One row of a [`data_table`], as data: the id the selection names it by, and the text of each of its cells in the order of the table's columns.
+/// One row of a [`data_table`], as data: the key the selection names it by, the caller's own, and the text of each of its cells in the order of the table's columns.
 ///
 /// The text is what a cell shows and what its column sorts by, unless the column builds its cells or compares its rows itself.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TableRow {
+pub struct TableRow<K> {
     /// Unique among the table's rows.
-    pub id: Arc<str>,
+    pub id: K,
     pub cells: Arc<[Arc<str>]>,
 }
 
-impl TableRow {
+impl<K: RowKey> TableRow<K> {
     pub fn new<C: Into<Arc<str>>>(
-        id: impl Into<Arc<str>>,
+        id: K,
         cells: impl IntoIterator<Item = C>,
     ) -> Self {
         Self {
-            id: id.into(),
+            id,
             cells: cells.into_iter().map(Into::into).collect(),
         }
     }
@@ -107,14 +107,14 @@ pub enum CellAlign {
 }
 
 /// What [`Column::cell`] builds a cell's content with.
-pub type CellBuilder = Rc<dyn Fn(&TableRow) -> Result<Box<dyn LayoutItem>, LayoutError>>;
+pub type CellBuilder<K> = Rc<dyn Fn(&TableRow<K>) -> Result<Box<dyn LayoutItem>, LayoutError>>;
 
 /// What [`Column::compare`] orders two rows with, ascending.
-pub type Comparator = Rc<dyn Fn(&TableRow, &TableRow) -> Ordering>;
+pub type Comparator<K> = Rc<dyn Fn(&TableRow<K>, &TableRow<K>) -> Ordering>;
 
 /// One column of a [`data_table`]: its header, its width, where its cells sit, and whether and how it sorts the rows and is resized.
 #[derive(Clone)]
-pub struct Column {
+pub struct Column<K> {
     /// Unique among the table's columns: what a [`TableSort`] and the [`ColumnWidths`] name it by.
     pub id: Arc<str>,
     /// The header's text.
@@ -131,12 +131,12 @@ pub struct Column {
     /// Whether its cells may run onto more lines than one: its text wraps at the column's width instead of being cut off where the cell ends, and a cell it [builds](Self::cell) is given the height it asks for, the row growing to hold its tallest cell. A table with such a column measures each row as it is built; one without stands every row at [`DataTableTokens::row_height`].
     pub wrap: bool,
     /// Builds each cell's content in place of the row's text for this column.
-    pub cell: Option<CellBuilder>,
+    pub cell: Option<CellBuilder<K>>,
     /// Orders two rows by this column, ascending, in place of comparing their text: numbers as numbers, anything else as words.
-    pub compare: Option<Comparator>,
+    pub compare: Option<Comparator<K>>,
 }
 
-impl Column {
+impl<K: RowKey> Column<K> {
     pub fn new(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
         Self {
             id: id.into(),
@@ -189,13 +189,13 @@ impl Column {
 
     pub fn cell(
         mut self,
-        build: impl Fn(&TableRow) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+        build: impl Fn(&TableRow<K>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     ) -> Self {
         self.cell = Some(Rc::new(build));
         self
     }
 
-    pub fn compare(mut self, compare: impl Fn(&TableRow, &TableRow) -> Ordering + 'static) -> Self {
+    pub fn compare(mut self, compare: impl Fn(&TableRow<K>, &TableRow<K>) -> Ordering + 'static) -> Self {
         self.compare = Some(Rc::new(compare));
         self
     }
@@ -216,11 +216,11 @@ pub struct TableSort {
 ///
 /// A [resizable](Column::resizable) column's header holds a splitter on its inline-end edge, the [`resize_handle`] a reader hears as "Resize Name column" with the column's width as its value: dragged, or focused with Tab after the table and stepped with the arrow keys, Home taking it to its [narrowest](Column::min_width), and Escape putting a drag back. A column resized keeps the width it was given in [`widths`](Self::widths) as though it were [`Fixed`](ColumnWidth::Fixed) — a [`Flex`](ColumnWidth::Flex) one too, so the flexible columns left share what the fixed ones leave, and columns that add up to more than the table scroll it sideways.
 #[derive(Props)]
-pub struct DataTableProps {
+pub struct DataTableProps<K: RowKey> {
     #[props(into, default)]
-    pub columns: Vec<Column>,
+    pub columns: Vec<Column<K>>,
     #[props(into, default)]
-    pub rows: Reactive<Vec<TableRow>>,
+    pub rows: Reactive<Vec<TableRow<K>>>,
     /// How large the rows and the header are drawn: their height, padding, text and sort marks, and the message shown while there are no rows, as [`ControlSize`] works them out. What a column's [`cell`](Column::cell) builds is sized where it is written.
     #[props(default)]
     pub size: ControlSize,
@@ -239,18 +239,18 @@ pub struct DataTableProps {
     /// How many rows can be chosen at once.
     #[props(default)]
     pub selection_mode: SelectionMode,
-    /// The bound selection in [`SelectionMode::Single`], by row id. `None` (the default) is uncontrolled.
+    /// The bound selection in [`SelectionMode::Single`], by row key. `None` (the default) is uncontrolled.
     #[props(some, into, default)]
-    pub selected: Option<RwSignal<Option<Arc<str>>>>,
-    /// The bound selection in [`SelectionMode::Multiple`], by row id. `None` (the default) is uncontrolled and starts empty.
+    pub selected: Option<RwSignal<Option<K>>>,
+    /// The bound selection in [`SelectionMode::Multiple`], by row key. `None` (the default) is uncontrolled and starts empty.
     #[props(some, into, default)]
-    pub selected_rows: Option<RwSignal<BTreeSet<Arc<str>>>>,
+    pub selected_rows: Option<RwSignal<HashSet<K>>>,
     /// Fired with the row a press or Enter chose on its own, and in [`SelectionMode::Single`] the row Space chose.
     #[props(some, default)]
-    pub on_select: Option<Handler<fn(TableRow)>>,
+    pub on_select: Option<Handler<fn(TableRow<K>)>>,
     /// Fired with every row chosen each time a press or a key changes them, in [`SelectionMode::Multiple`].
     #[props(some, default)]
-    pub on_selection_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
+    pub on_selection_change: Option<Handler<fn(HashSet<K>)>>,
     /// What a reader calls the table.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
@@ -266,7 +266,7 @@ pub struct DataTableProps {
 }
 
 /// Rows of data under a header of sortable, resizable columns, walked cell by cell.
-pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn data_table<K: RowKey>(props: DataTableProps<K>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let DataTableProps {
         columns,
         rows,
@@ -285,7 +285,7 @@ pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutEr
         color,
         empty,
     } = props;
-    let columns: Rc<[Column]> = columns.into();
+    let columns: Rc<[Column<K>]> = columns.into();
     let sort = sort.unwrap_or_else(|| signal(None));
     let widths = widths.unwrap_or_else(|| signal(ColumnWidths::new()));
     let selection = RowSelection::new(selection_mode, selected, selected_rows, on_selection_change);
@@ -302,7 +302,7 @@ pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     let row_height = DataTableTokens::current().row_height(size);
     let wraps = columns.iter().any(|column| column.wrap);
 
-    let mut made: Option<Rc<Table>> = None;
+    let mut made: Option<Rc<Table<K>>> = None;
     let scroll = LayoutScrollArea::new_with(LayoutStyle::new().flex_grow(1.0), |viewport| {
         let table = Rc::new(Table {
             columns,
@@ -330,7 +330,7 @@ pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutEr
             table.places.clone().list(
                 OVERSCAN,
                 source,
-                |item: &(TableRow, usize)| item.clone(),
+                |item: &(TableRow<K>, usize)| item.clone(),
                 move |index, (row, count)| body_row(&table, row, line_place(index + 1, count)),
             )?
         };
@@ -379,12 +379,12 @@ fn line_place(line: usize, rows: usize) -> SetPosition {
 }
 
 /// The ids of the rows in the order shown: what a range and Ctrl+A choose among.
-fn ids(rows: &[TableRow]) -> Vec<Arc<str>> {
+fn ids<K: RowKey>(rows: &[TableRow<K>]) -> Vec<K> {
     rows.iter().map(|row| row.id.clone()).collect()
 }
 
 /// Sorts `rows` by `sort`'s column, stably, the column's own comparison first and its text's after.
-fn order(rows: &mut [TableRow], columns: &[Column], sort: Option<&TableSort>) {
+fn order<K: RowKey>(rows: &mut [TableRow<K>], columns: &[Column<K>], sort: Option<&TableSort>) {
     let Some(sort) = sort else {
         return;
     };
@@ -417,9 +417,9 @@ fn compare_text(a: &str, b: &str) -> Ordering {
 
 /// The rows in the order shown. Equal only to itself, so the memo notifies on every reorder rather than comparing whole tables.
 #[derive(Clone)]
-struct Ordered(Rc<Vec<TableRow>>);
+struct Ordered<K>(Rc<Vec<TableRow<K>>>);
 
-impl PartialEq for Ordered {
+impl<K> PartialEq for Ordered<K> {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
@@ -427,31 +427,31 @@ impl PartialEq for Ordered {
 
 /// Where the keyboard's cursor is: a row by id, `None` for the header, and a column by index.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct At {
-    row: Option<Arc<str>>,
+struct At<K> {
+    row: Option<K>,
     column: usize,
 }
 
-struct Table {
-    columns: Rc<[Column]>,
-    rows: Memo<Ordered>,
+struct Table<K: RowKey> {
+    columns: Rc<[Column<K>]>,
+    rows: Memo<Ordered<K>>,
     sort: RwSignal<Option<TableSort>>,
     on_sort: Option<Handler<fn(TableSort)>>,
     widths: RwSignal<ColumnWidths>,
-    selection: RowSelection,
-    on_select: Option<Handler<fn(TableRow)>>,
+    selection: RowSelection<K>,
+    on_select: Option<Handler<fn(TableRow<K>)>>,
     /// Deliberately not the selection: walking the table chooses nothing.
-    cursor: RwSignal<Option<At>>,
+    cursor: RwSignal<Option<At<K>>>,
     places: RowPlaces,
     /// The header's height, and the least a row stands at.
     row_height: f32,
     focus: Cell<Option<FocusId>>,
-    built: BuiltRows<At>,
+    built: BuiltRows<At<K>>,
     color: Option<Reactive<Color>>,
 }
 
-impl Table {
-    fn rows(&self) -> Rc<Vec<TableRow>> {
+impl<K: RowKey> Table<K> {
+    fn rows(&self) -> Rc<Vec<TableRow<K>>> {
         self.rows.with(|rows| rows.0.clone())
     }
 
@@ -469,7 +469,7 @@ impl Table {
     }
 
     /// The cursor as a line of the grid — `0` the header, `1 + i` the row at `i` — and a column; `None` while it names a row no longer shown.
-    fn line_of(&self, rows: &[TableRow], at: &At) -> Option<(usize, usize)> {
+    fn line_of(&self, rows: &[TableRow<K>], at: &At<K>) -> Option<(usize, usize)> {
         let line = match &at.row {
             None => 0,
             Some(id) => 1 + rows.iter().position(|row| &row.id == id)?,
@@ -477,14 +477,14 @@ impl Table {
         Some((line, at.column.min(self.width().saturating_sub(1))))
     }
 
-    fn at_line(rows: &[TableRow], line: usize, column: usize) -> At {
+    fn at_line(rows: &[TableRow<K>], line: usize, column: usize) -> At<K> {
         At {
             row: line.checked_sub(1).map(|i| rows[i].id.clone()),
             column,
         }
     }
 
-    fn shows_cursor(&self, at: &At) -> bool {
+    fn shows_cursor(&self, at: &At<K>) -> bool {
         self.focus.get().is_some_and(focus::is_focus_visible)
             && self.cursor.with(|cursor| cursor.as_ref() == Some(at))
     }
@@ -521,14 +521,14 @@ impl Table {
         self.cursor.set(Some(At { row, column: 0 }));
     }
 
-    fn move_to(&self, rows: &[TableRow], line: usize, column: usize) {
+    fn move_to(&self, rows: &[TableRow<K>], line: usize, column: usize) {
         let at = Self::at_line(rows, line, column);
         self.cursor.set(Some(at.clone()));
         self.reveal(line, &at);
     }
 
     /// Puts the cursor on the cell `at` and the keyboard on the table, as a reader moving to that cell asks.
-    fn reach(&self, at: &At) {
+    fn reach(&self, at: &At<K>) {
         let rows = self.rows();
         if let Some((line, column)) = self.line_of(&rows, at) {
             self.move_to(&rows, line, column);
@@ -541,7 +541,7 @@ impl Table {
     /// Moves the cursor from the row on line `from` to `line`, choosing every row between the anchor and it when `ranging`, and making its row the anchor otherwise.
     fn walk_to(
         &self,
-        rows: &[TableRow],
+        rows: &[TableRow<K>],
         (line, column): (usize, usize),
         from: usize,
         ranging: bool,
@@ -565,7 +565,7 @@ impl Table {
     }
 
     /// Scrolls the least distance that brings the cursor's cell into view, below the header that stays over the rows: down by the row's place, which is known whether or not it is built, and across by the cell's, once it is.
-    fn reveal(&self, line: usize, at: &At) {
+    fn reveal(&self, line: usize, at: &At<K>) {
         if let Some(index) = line.checked_sub(1) {
             self.places.reveal(index);
         }
@@ -594,7 +594,7 @@ impl Table {
     }
 
     /// Does what `gesture` asks of the row at `index`, and tells [`on_select`](DataTableProps::on_select) of a row chosen on its own.
-    fn act(&self, rows: &[TableRow], index: usize, gesture: Gesture) {
+    fn act(&self, rows: &[TableRow<K>], index: usize, gesture: Gesture) {
         let row = &rows[index];
         let from = self.cursor.peek().and_then(|at| at.row);
         self.selection
@@ -625,7 +625,7 @@ impl Table {
     }
 
     /// What a press on the cell `at` does: sorts by its column on the header, and anywhere else chooses its row as the modifiers held say.
-    fn press(&self, at: &At) {
+    fn press(&self, at: &At<K>) {
         let rows = self.rows();
         if let Some((line, column)) = self.line_of(&rows, at) {
             match line.checked_sub(1) {
@@ -710,7 +710,7 @@ impl Table {
 }
 
 /// A cell's box in the column at `index`, in the header or in a row: its width, its height, where its content sits across it, and the space from its edges.
-fn cell_box(table: &Table, index: usize, header: bool) -> LayoutStyle {
+fn cell_box<K: RowKey>(table: &Table<K>, index: usize, header: bool) -> LayoutStyle {
     let size = table.places.size();
     let style = LayoutStyle::row()
         .align_items(AlignItems::CENTER)
@@ -782,7 +782,7 @@ fn wrapped_text(
 }
 
 /// The header: one cell naming each column, held at the top of the view while the rows scroll under it, on an opaque surface they cannot show through.
-fn header_row(table: &Rc<Table>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn header_row<K: RowKey>(table: &Rc<Table<K>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let cells = (0..table.width())
         .map(|index| header_cell(table, index))
         .collect::<Result<Vec<_>, _>>()?;
@@ -813,7 +813,7 @@ fn header_row(table: &Rc<Table>) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 /// A column's header, named by the column's label alone so a reader does not hear its splitter's name in it too.
-fn header_cell(table: &Rc<Table>, index: usize) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn header_cell<K: RowKey>(table: &Rc<Table<K>>, index: usize) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let column = &table.columns[index];
     let size = table.places.size();
     let at = At {
@@ -868,8 +868,8 @@ fn header_cell(table: &Rc<Table>, index: usize) -> Result<Box<dyn LayoutItem>, L
 }
 
 /// The splitter on the inline-end edge of the header of the column at `index`, whose laid-out box is `laid`: what a drag or a key step resizes the column by. A cancelled drag gives the widths back as they were before it, so a flexible column it took hold of flexes again.
-fn column_resizer(
-    table: &Rc<Table>,
+fn column_resizer<K: RowKey>(
+    table: &Rc<Table<K>>,
     index: usize,
     laid: RwSignal<Option<RwSignal<Rect>>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -923,9 +923,9 @@ fn column_resizer(
 }
 
 /// A cell the keyboard's cursor can rest on: announced as `role`, ringed while the cursor is on it, and pressed like the row it is in.
-fn presented_cell(
-    table: &Rc<Table>,
-    at: At,
+fn presented_cell<K: RowKey>(
+    table: &Rc<Table<K>>,
+    at: At<K>,
     index: usize,
     role: Role,
     content: Vec<Box<dyn LayoutItem>>,
@@ -967,9 +967,9 @@ fn presented_cell(
     Ok(cell)
 }
 
-fn body_row(
-    table: &Rc<Table>,
-    row: TableRow,
+fn body_row<K: RowKey>(
+    table: &Rc<Table<K>>,
+    row: TableRow<K>,
     place: SetPosition,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let size = table.places.size();

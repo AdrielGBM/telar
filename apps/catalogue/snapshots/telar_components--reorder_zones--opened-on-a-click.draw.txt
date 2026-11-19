@@ -1,0 +1,58 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element list
+            element group
+              element listitem
+                rect 329,228 142x29
+                element group
+                  rect 329,228 142x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  element group
+                    matrix 1,0,0,1,341,234
+                      text 0,0 118x16.8 "Contents" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    end
+                  end
+                end
+              end
+              element listitem
+                rect 329,265 142x29 border=2 border-color=#4261edff
+                rect 331,267 138x25 border=1 border-color=#ffffffff
+                element group
+                  rect 329,265 142x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  element group
+                    matrix 1,0,0,1,341,271
+                      text 0,0 118x16.8 "Chapter one" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    end
+                  end
+                end
+              end
+              element listitem
+                rect 329,302 142x29
+                element group
+                  rect 329,302 142x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  element group
+                    matrix 1,0,0,1,341,308
+                      text 0,0 118x16.8 "Cover" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              rect 329,228 142x2
+            end
+          end
+          element group
+            matrix 1,0,0,1,329,354
+              text 0,0 142x16.8 "Opened: Chapter one" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

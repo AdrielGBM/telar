@@ -10,13 +10,15 @@ use std::time::Duration;
 
 use geometry_core::Rect;
 use layout_core::NodeId;
-use platform_core::Cursor;
+use platform_core::{Cursor, PointerButton};
 use reactive_core::{
-    Reactive, RwSignal, Timer, Transaction, on_cleanup, run_after, signal, timer_now,
+    OwnerId, Reactive, RwSignal, Timer, dispose_owner, effect, on_cleanup, root_scope, run_after,
+    signal, timer_now, untrack,
 };
 use web_time::Instant;
 
 use crate::context::track_layout;
+use crate::drag::{Held, HeldStroke, drag_start, hold_stroke};
 use crate::input_region::{from_surface, placed_in, placement_depth, to_surface, visible_rect};
 use crate::layout_item::LayoutItem;
 use crate::reorder::{Axis, insertion_index};
@@ -87,6 +89,8 @@ pub struct DragItem<P> {
     label: Option<Rc<dyn Fn() -> String>>,
     threshold: f32,
     on_detach: Option<Rc<dyn Fn(P, (f32, f32))>>,
+    along: Option<Axis>,
+    within: Option<Rc<dyn Fn() -> Rect>>,
 }
 
 impl<P> DragItem<P> {
@@ -97,6 +101,8 @@ impl<P> DragItem<P> {
             label: None,
             threshold: DRAG_THRESHOLD,
             on_detach: None,
+            along: None,
+            within: None,
         }
     }
 
@@ -120,6 +126,22 @@ impl<P> DragItem<P> {
     pub fn on_detach(self, on_detach: impl Fn(P, (f32, f32)) + 'static) -> Self {
         Self {
             on_detach: Some(Rc::new(on_detach)),
+            ..self
+        }
+    }
+
+    /// Carries the payload along `axis` only: across it, the pointer counts as staying where it picked the payload up.
+    pub fn along(self, axis: Axis) -> Self {
+        Self {
+            along: Some(axis),
+            ..self
+        }
+    }
+
+    /// Carries the payload inside `bounds` only, in the space the item is laid out in, read at each move: past them, the pointer counts as standing at their edge.
+    pub fn within(self, bounds: impl Fn() -> Rect + 'static) -> Self {
+        Self {
+            within: Some(Rc::new(bounds)),
             ..self
         }
     }
@@ -160,7 +182,7 @@ impl<P> DropArea<P> {
         }
     }
 
-    /// Where the area and its items are, read each time the pointer is measured against them.
+    /// Where the area and its items are, read each time the pointer is measured against them, and again whenever a signal it reads changes while a payload is carried.
     pub fn layout(self, layout: impl Fn() -> AreaLayout + 'static) -> Self {
         Self {
             layout: Rc::new(layout),
@@ -177,18 +199,33 @@ impl<P> DropArea<P> {
     }
 }
 
-/// A drag in progress.
+/// A drag in progress, as the widgets that draw it read it.
 #[derive(Clone)]
 struct Stroke<P> {
     payload: P,
     label: Option<Arc<str>>,
     /// The item it was picked up from.
     from: NodeId,
-    /// Where it was picked up, in the space the item is laid out in.
+    /// The box the item is laid out in, which the points below are measured in: kept apart from the item, which a list that builds only the rows on screen may drop mid-stroke.
+    space: Option<NodeId>,
+    /// Where it was picked up, in `space`.
     grabbed: (f32, f32),
     /// Where the pointer is, on the surface.
     at: (f32, f32),
     over: Option<(DropAreaId, DropPlace<usize>)>,
+}
+
+/// What a session holds while a stroke runs, beyond what the widgets read: the pointer it follows, what watches the areas move, and the item's own say over where the payload goes.
+struct Hand<P> {
+    _held: HeldStroke,
+    watch: OwnerId,
+    item: Rc<DragItem<P>>,
+}
+
+impl<P> Drop for Hand<P> {
+    fn drop(&mut self) {
+        dispose_owner(self.watch);
+    }
 }
 
 /// What the pointer at one place is over.
@@ -199,7 +236,7 @@ struct Reading {
 
 struct Session<P: Clone + 'static> {
     stroke: RwSignal<Option<Stroke<P>>>,
-    transaction: Transaction<Option<Stroke<P>>>,
+    hand: RefCell<Option<Hand<P>>>,
     areas: RefCell<Vec<(DropAreaId, Rc<DropArea<P>>)>>,
     next_area: Cell<u64>,
     hold_delay: Cell<Duration>,
@@ -211,7 +248,7 @@ struct Session<P: Clone + 'static> {
 
 /// Carries a payload of the app's type `P` from an [item](Self::item) to an [area](Self::area), wherever in the app either was built.
 ///
-/// While the pointer carries it, the session works out which area and which place in it the payload would land at, asking the area whether it [accepts](DropArea::new) the payload there; scrolls a scroll area the pointer holds near its edge; and tells an area which of its items the pointer [rests on](DropArea::on_hold). Letting go drops it on the area, or tells the item it was [let go](DragItem::on_detach) over none. Escape, another button or the window losing focus puts everything back as it was, through the drag's [transaction](crate::StyledContainer::drag_transaction).
+/// Once a press on an item travels past its threshold the session holds the stroke itself, so the item may go away mid-stroke — a row a list stops building once it scrolls out of view — and the payload is still carried to where it is let go. While the pointer carries it, the session works out which area and which place in it the payload would land at, asking the area whether it [accepts](DropArea::new) the payload there, and measures again whenever an area is laid out anew; scrolls a scroll area the pointer holds near its edge; and tells an area which of its items the pointer [rests on](DropArea::on_hold). Letting go drops it on the area, or tells the item it was [let go](DragItem::on_detach) over none. Escape, another button or the window losing focus puts everything back as it was before the press.
 ///
 /// The session draws nothing. Each widget reads where the payload would land ([`place_in`](Self::place_in)) to draw its own line or highlight, and whoever shows the [`label`](Self::label) beside the [`pointer`](Self::pointer) draws that.
 ///
@@ -232,10 +269,9 @@ impl<P: Clone + 'static> Default for DragSession<P> {
 
 impl<P: Clone + 'static> DragSession<P> {
     pub fn new() -> Self {
-        let stroke = signal(None);
         Self(Rc::new(Session {
-            stroke,
-            transaction: Transaction::new(stroke),
+            stroke: signal(None),
+            hand: RefCell::new(None),
             areas: RefCell::new(Vec::new()),
             next_area: Cell::new(0),
             hold_delay: Cell::new(HOLD_DELAY),
@@ -252,13 +288,15 @@ impl<P: Clone + 'static> DragSession<P> {
         self
     }
 
-    /// Makes `container` an item the pointer picks `item`'s payload up from: a press that travels past the item's threshold starts carrying it, and the release drops it. Shows the grab cursor over the box, and the grabbing one while it is the item carried.
+    /// Makes `container` an item the pointer picks `item`'s payload up from: a press that travels past the item's threshold starts carrying it, and the session carries it from there until it is let go, whether or not the box is still there. Shows the grab cursor over the box, and the grabbing one while it is the item carried.
     ///
-    /// Sets the box's drag handlers, threshold and transaction, so none of them is set on it elsewhere.
+    /// Sets the box's drag handlers and threshold, so neither is set on it elsewhere.
     pub fn item(&self, container: StyledContainer, item: DragItem<P>) -> StyledContainer {
         let node = container.layout_node();
         let item = Rc::new(item);
         let stroke = self.0.stroke;
+        // One pick-up per press: a stroke cancelled with the button still down goes on reporting moves through the box, and must not pick the payload up again.
+        let picked = Rc::new(Cell::new(false));
         container
             .cursor(Reactive::of(move || {
                 match stroke.with(|stroke| stroke.as_ref().is_some_and(|s| s.from == node)) {
@@ -267,24 +305,16 @@ impl<P: Clone + 'static> DragSession<P> {
                 }
             }))
             .drag_threshold(item.threshold)
-            .drag_transaction(self.0.transaction)
             .on_drag({
                 let session = Rc::clone(&self.0);
-                let item = Rc::clone(&item);
-                move |x, y| session.carry(node, &item, (x, y))
-            })
-            .on_drag_end({
-                let session = Rc::clone(&self.0);
-                move |x, y| session.land(node, &item, (x, y))
-            })
-            .on_drag_cancel({
-                let session = Rc::downgrade(&self.0);
-                move || {
-                    if let Some(session) = session.upgrade() {
-                        session.settle();
+                let picked = Rc::clone(&picked);
+                move |x, y| {
+                    if !picked.replace(true) {
+                        session.pick_up(node, &item, (x, y));
                     }
                 }
             })
+            .on_drag_end(move |_, _| picked.set(false))
     }
 
     /// Registers `area` as a place a carried payload can be dropped, until the owner registering it is disposed.
@@ -308,7 +338,7 @@ impl<P: Clone + 'static> DragSession<P> {
             .with(|stroke| stroke.as_ref().map(|s| s.payload.clone()))
     }
 
-    /// The item what the pointer carries was picked up from, reactively.
+    /// The item what the pointer carries was picked up from, reactively. It names the box as it was when the drag started, which a list that builds only the rows on screen may since have dropped.
     pub fn carried_from(&self) -> Option<NodeId> {
         self.0.stroke.with(|stroke| stroke.as_ref().map(|s| s.from))
     }
@@ -343,47 +373,76 @@ impl<P: Clone + 'static> DragSession<P> {
     pub fn travel(&self) -> Option<(f32, f32)> {
         self.0.stroke.with(|stroke| {
             let stroke = stroke.as_ref()?;
-            let here = in_space_of(stroke.from, stroke.at)?;
+            let here = in_space(stroke.space, stroke.at, false)?;
             Some((here.0 - stroke.grabbed.0, here.1 - stroke.grabbed.1))
         })
     }
 }
 
 impl<P: Clone + 'static> Session<P> {
-    /// Moves the payload picked up from `from` to where the item reports the pointer, `local` to the item, starting the stroke if this is its first report.
-    fn carry(self: &Rc<Self>, from: NodeId, item: &DragItem<P>, local: (f32, f32)) {
-        let Some((laid, at)) = surface_point(from, local) else {
+    /// Picks up `item`'s payload from the box `from`, the item having reported the pointer at `local` to it, and holds the stroke from here on.
+    fn pick_up(self: &Rc<Self>, from: NodeId, item: &Rc<DragItem<P>>, local: (f32, f32)) {
+        if self.stroke.peek().is_some() {
+            return;
+        }
+        let Some((grabbed, at)) = surface_point(from, local) else {
             return;
         };
-        let stroke = match self.stroke.peek() {
-            Some(stroke) if stroke.from == from => Stroke { at, ..stroke },
-            Some(_) => return,
-            None => {
-                let Some(payload) = (item.payload)() else {
-                    return;
-                };
-                self.settle();
-                Stroke {
-                    payload,
-                    label: item.label.as_ref().map(|label| Arc::from(label())),
-                    from,
-                    grabbed: laid,
-                    at,
-                    over: None,
-                }
-            }
+        let Some(payload) = (item.payload)() else {
+            return;
         };
-        self.update(stroke);
+        self.settle();
+        let button = drag_start().map_or(PointerButton::Primary, |start| start.button);
+        let session = Rc::downgrade(self);
+        let held = hold_stroke(button, move |heard| {
+            if let Some(session) = session.upgrade() {
+                session.hear(heard);
+            }
+        });
+        let hand = Hand {
+            _held: held,
+            watch: self.watch_areas(),
+            item: Rc::clone(item),
+        };
+        *self.hand.borrow_mut() = Some(hand);
+        self.update(Stroke {
+            payload,
+            label: item.label.as_ref().map(|label| Arc::from(label())),
+            from,
+            space: placed_in(from),
+            grabbed,
+            at,
+            over: None,
+        });
     }
 
-    /// Ends the stroke picked up from `from` where the item reports the release, and tells the area it lands on, or the item when it lands on none.
-    fn land(self: &Rc<Self>, from: NodeId, item: &DragItem<P>, local: (f32, f32)) {
-        let Some(stroke) = self.stroke.peek().filter(|stroke| stroke.from == from) else {
+    fn hear(self: &Rc<Self>, heard: Held) {
+        match heard {
+            Held::Moved(at) => {
+                if let Some(stroke) = self.stroke.peek() {
+                    let at = self.confined(&stroke, at);
+                    self.update(Stroke { at, ..stroke });
+                }
+            }
+            Held::Released(at) => self.land(at),
+            Held::Cancelled => self.end(),
+        }
+    }
+
+    /// Ends the stroke where the pointer let go at `at`, and tells the area it lands on, or the item when it lands on none.
+    fn land(self: &Rc<Self>, at: (f32, f32)) {
+        let Some(stroke) = self.stroke.peek() else {
             return;
         };
-        let at = surface_point(from, local).map_or(stroke.at, |(_, at)| at);
+        let at = self.confined(&stroke, at);
         let reading = self.read(&stroke.payload, at);
         self.settle();
+        let on_detach = self
+            .hand
+            .borrow()
+            .as_ref()
+            .and_then(|hand| hand.item.on_detach.clone());
+        // Told while the stroke still reads as carried, so a widget can tell its own item from another's.
         match reading.over {
             Some((area, place)) => {
                 if let Some(area) = self.area_of(area) {
@@ -391,31 +450,100 @@ impl<P: Clone + 'static> Session<P> {
                 }
             }
             None => {
-                if let Some(on_detach) = &item.on_detach {
+                if let Some(on_detach) = on_detach {
                     on_detach(stroke.payload.clone(), at);
                 }
             }
         }
-        self.write(None);
+        self.end();
+    }
+
+    /// Lets the stroke go: nothing is carried, and nothing waits on the pointer.
+    fn end(&self) {
+        self.settle();
+        self.stroke.set(None);
+        let hand = self.hand.borrow_mut().take();
+        drop(hand);
+    }
+
+    /// Where the item lets the pointer at `at` carry the payload: along its axis and inside its bounds, when it keeps it to either.
+    fn confined(&self, stroke: &Stroke<P>, at: (f32, f32)) -> (f32, f32) {
+        let hand = self.hand.borrow();
+        let Some(item) = hand.as_ref().map(|hand| &hand.item) else {
+            return at;
+        };
+        if item.along.is_none() && item.within.is_none() {
+            return at;
+        }
+        let Some(point) = in_space(stroke.space, at, false) else {
+            return at;
+        };
+        let point = match item.along {
+            Some(Axis::Horizontal) => (point.0, stroke.grabbed.1),
+            Some(Axis::Vertical) => (stroke.grabbed.0, point.1),
+            None => point,
+        };
+        let point = match &item.within {
+            Some(bounds) => {
+                let bounds = bounds();
+                (
+                    point.0.clamp(bounds.x, bounds.x + bounds.width),
+                    point.1.clamp(bounds.y, bounds.y + bounds.height),
+                )
+            }
+            None => point,
+        };
+        match stroke.space {
+            Some(space) => to_surface(space, point),
+            None => point,
+        }
     }
 
     /// Measures `stroke` against the areas, writes it, and starts or stops what waits on where the pointer is.
     fn update(self: &Rc<Self>, stroke: Stroke<P>) {
         let reading = self.read(&stroke.payload, stroke.at);
         self.rest(reading.resting);
-        self.write(Some(Stroke {
+        let at = stroke.at;
+        self.stroke.set(Some(Stroke {
             over: reading.over,
             ..stroke
         }));
-        self.autoscroll(stroke.at);
+        self.autoscroll(at);
     }
 
-    fn write(&self, next: Option<Stroke<P>>) {
-        if self.transaction.is_open() {
-            let _ = self.transaction.preview(move |stroke| *stroke = next);
-        } else {
-            self.stroke.set(next);
+    /// Measures the stroke again where the pointer already is: for when what is under it moved and the pointer did not.
+    fn remeasure(self: &Rc<Self>) {
+        if let Some(stroke) = self.stroke.peek() {
+            self.update(stroke);
         }
+    }
+
+    /// Watches the areas for as long as the owner it answers lives: each one's box and whatever its layout reads, so a stroke is measured again once the areas move under a pointer that does not, as a folder held open does to the rows below it.
+    fn watch_areas(self: &Rc<Self>) -> OwnerId {
+        let scope = root_scope();
+        let session = Rc::downgrade(self);
+        let seen: RefCell<Option<Vec<(Rect, AreaLayout)>>> = RefCell::new(None);
+        effect(move || {
+            let Some(session) = session.upgrade() else {
+                return;
+            };
+            let areas = session.areas.borrow().clone();
+            let now: Vec<(Rect, AreaLayout)> = areas
+                .iter()
+                .map(|(_, area)| {
+                    let laid = track_layout(area.node)
+                        .map(|rect| rect.get())
+                        .unwrap_or_default();
+                    (laid, (area.layout)())
+                })
+                .collect();
+            let moved = seen.borrow().as_ref().is_some_and(|seen| *seen != now);
+            *seen.borrow_mut() = Some(now);
+            if moved {
+                untrack(|| session.remeasure());
+            }
+        });
+        scope.id()
     }
 
     /// Stops what waits on a stroke: the hold and the scroll.
@@ -603,10 +731,10 @@ fn surface_point(from: NodeId, local: (f32, f32)) -> Option<((f32, f32), (f32, f
     Some((point, at))
 }
 
-/// A point on the surface in the space `item` is laid out in, wherever a clip would hide it.
-fn in_space_of(item: NodeId, at: (f32, f32)) -> Option<(f32, f32)> {
-    match placed_in(item) {
-        Some(parent) => from_surface(parent, at, false),
+/// A point on the surface in the space the box `space` lays its children out in, or in the surface's own for `None`: `None` only where a clip hides it, when `clipped`, or a transform flattened the space.
+fn in_space(space: Option<NodeId>, at: (f32, f32), clipped: bool) -> Option<(f32, f32)> {
+    match space {
+        Some(space) => from_surface(space, at, clipped),
         None => Some(at),
     }
 }

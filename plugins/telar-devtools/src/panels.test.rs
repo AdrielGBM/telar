@@ -453,12 +453,15 @@ fn the_reader_rows_nest_as_a_reader_steps_through_them() {
         .iter()
         .find(|row| &*row.id == READER_ROW)
         .expect("the reader's branch");
-    let ids = |rows: &[telar_components::TreeNode]| -> Vec<String> {
+    let ids = |rows: &[telar_components::TreeNode<std::sync::Arc<str>>]| -> Vec<String> {
         rows.iter().map(|row| row.id.to_string()).collect()
     };
-    assert_eq!(ids(&reader.children), ["reader/0", "reader/3"]);
-    assert_eq!(ids(&reader.children[0].children), ["reader/1"]);
-    assert_eq!(ids(&reader.children[0].children[0].children), ["reader/2"]);
+    assert_eq!(ids(reader.child_nodes()), ["reader/0", "reader/3"]);
+    assert_eq!(ids(reader.child_nodes()[0].child_nodes()), ["reader/1"]);
+    assert_eq!(
+        ids(reader.child_nodes()[0].child_nodes()[0].child_nodes()),
+        ["reader/2"]
+    );
 }
 
 /// Where the selected component's size is drawn among its details, in an inspector `size` big.

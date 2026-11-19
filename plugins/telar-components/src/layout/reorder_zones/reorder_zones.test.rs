@@ -618,3 +618,24 @@ fn the_label_of_the_item_in_hand_is_drawn_only_while_it_is_carried() {
     telar::relayout_if_dirty();
     assert!(drawn_texts(&board.tree).is_empty());
 }
+
+#[test]
+fn a_click_or_enter_on_an_item_opens_it_and_a_drag_does_not() {
+    let opened: Rc<RefCell<Vec<Slot>>> = Rc::default();
+    let opening = opened.clone();
+    let mut board = board_with(
+        false,
+        4.0,
+        move |group| group.on_activate(move |slot| opening.borrow_mut().push(slot)),
+        |_| Vec::new(),
+    );
+    board.click((110.0, 20.0));
+    assert_eq!(*opened.borrow(), vec![Slot::new(0, 1)]);
+
+    board.event(named(NamedKey::Enter));
+    assert_eq!(*opened.borrow(), vec![Slot::new(0, 1), Slot::new(0, 1)]);
+
+    board.drag((10.0, 20.0), &[(60.0, 20.0), (260.0, 20.0)]);
+    assert_eq!(opened.borrow().len(), 2, "a drag opens nothing");
+    assert_eq!(board.items.peek()[0], vec!['b', 'c', 'a']);
+}

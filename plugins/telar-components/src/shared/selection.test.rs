@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use std::sync::Arc;
+
 use telar::KeyboardConvention;
 
 use super::*;
@@ -9,13 +11,15 @@ fn ids(names: &[&str]) -> Vec<Arc<str>> {
     names.iter().map(|name| Arc::from(*name)).collect()
 }
 
-fn chosen(many: RwSignal<BTreeSet<Arc<str>>>) -> Vec<String> {
-    many.get().iter().map(|id| id.to_string()).collect()
+fn chosen(many: RwSignal<HashSet<Arc<str>>>) -> Vec<String> {
+    let mut chosen: Vec<String> = many.get().iter().map(|id| id.to_string()).collect();
+    chosen.sort();
+    chosen
 }
 
-fn several() -> (RowSelection, RwSignal<BTreeSet<Arc<str>>>) {
+fn several() -> (RowSelection<Arc<str>>, RwSignal<HashSet<Arc<str>>>) {
     crate::test_support::fresh_layout_runtime();
-    let many = signal(BTreeSet::new());
+    let many = signal(HashSet::new());
     let selection = RowSelection::new(SelectionMode::Multiple, None, Some(many), None);
     (selection, many)
 }
@@ -68,8 +72,8 @@ fn single_mode_keeps_one_row_whatever_the_gesture() {
     assert_eq!(one.get().as_deref(), Some("c"));
     selection.all(&order);
     assert_eq!(one.get().as_deref(), Some("c"), "Ctrl+A chooses nothing");
-    assert!(selection.is_selected("c"));
-    assert!(!selection.is_selected("a"));
+    assert!(selection.is_selected(&Arc::from("c")));
+    assert!(!selection.is_selected(&Arc::from("a")));
 }
 
 #[test]
@@ -149,7 +153,7 @@ fn the_handler_hears_each_change_and_nothing_that_changes_nothing() {
         SelectionMode::Multiple,
         None,
         None,
-        Some(Handler::from(move |rows: BTreeSet<Arc<str>>| {
+        Some(Handler::from(move |rows: HashSet<Arc<str>>| {
             sink.borrow_mut().push(rows.len())
         })),
     );

@@ -130,3 +130,30 @@ fn a_component_drawn_on_a_layer_says_a_call_has_nothing_to_place() {
     const { assert!(PlacedProps::IN_FLOW) };
     const { assert!(!LayeredProps::IN_FLOW) };
 }
+
+#[derive(Props)]
+pub struct PickProps<K: Clone + PartialEq + 'static> {
+    pub options: Vec<K>,
+    #[props(default)]
+    pub chosen: Option<K>,
+    #[props(default)]
+    pub label: String,
+}
+
+/// A props struct generic over the key its caller names things by takes that key from what it is handed, in any order, and a call's placement check still names it without one.
+#[test]
+fn a_generic_props_struct_infers_its_parameter_from_the_props_set() {
+    #[derive(Clone, Debug, PartialEq)]
+    enum Fruit {
+        Apple,
+        Pear,
+    }
+    let props = PickProps::props()
+        .chosen(Some(Fruit::Pear))
+        .options(vec![Fruit::Apple, Fruit::Pear])
+        .label("Fruit".to_string())
+        .build();
+    assert_eq!(props.chosen, Some(Fruit::Pear));
+    assert_eq!(props.clone().options, vec![Fruit::Apple, Fruit::Pear]);
+    const { assert!(PickProps::IN_FLOW) };
+}

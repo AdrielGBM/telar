@@ -331,12 +331,26 @@ fn is_number(ty: &Type) -> bool {
     }
 }
 
-/// Expands the `Props` derive into the builder, its markers and the `build` that needs them all set.
 pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     let props = collect(&input)?;
     let in_flow = !draws_on_a_layer(&input.attrs)?;
     let (name, vis) = (&input.ident, &input.vis);
     let builder = format_ident!("{name}Builder");
+    let declared: Vec<TokenStream2> = input
+        .generics
+        .type_params()
+        .map(|param| quote! { #param })
+        .collect();
+    let named: Vec<TokenStream2> = input
+        .generics
+        .type_params()
+        .map(|param| {
+            let ident = &param.ident;
+            quote! { #ident }
+        })
+        .collect();
+    let where_clause = &input.generics.where_clause;
+    let own = angled(named.iter().cloned());
     let required: Vec<&Prop> = props.iter().filter(|p| p.is_required()).collect();
     // One marker per required prop, generated here rather than imported from a runtime crate, which every deriving crate would then have to name. Per prop rather than one shared marker because the name lands in the error, so `RowPropsBuilder<RowPropsMissingLabel>` says which prop was forgotten. Named after the struct too, because two props structs in one module are ordinary and a marker named only after the prop collided.
     let markers: Vec<Ident> = required
@@ -357,13 +371,29 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
             .position(|r| r.name == prop.name)
             .map(|i| slots[i].clone())
     };
+    let with_own = |declare: bool, rest: Vec<TokenStream2>| {
+        let lead = match declare {
+            true => &declared,
+            false => &named,
+        };
+        angled(lead.iter().cloned().chain(rest))
+    };
 
-    let generics = angled(slots.iter().map(|s| quote! { #s }));
-    let all_missing = angled(markers.iter().map(|m| quote! { #m }));
-    let all_set = angled(required.iter().map(|p| {
-        let ty = &p.ty;
-        quote! { #ty }
-    }));
+    let slot_list: Vec<TokenStream2> = slots.iter().map(|s| quote! { #s }).collect();
+    let declared_generics = with_own(true, slot_list.clone());
+    let generics = with_own(false, slot_list);
+    let all_missing = with_own(false, markers.iter().map(|m| quote! { #m }).collect());
+    let all_set = with_own(
+        false,
+        required
+            .iter()
+            .map(|p| {
+                let ty = &p.ty;
+                quote! { #ty }
+            })
+            .collect(),
+    );
+    let own_declared = with_own(true, Vec::new());
 
     let fields = props.iter().map(|p| {
         let name = &p.name;
@@ -411,21 +441,28 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     // A required prop's setter moves one parameter from the marker to the real type and leaves the others generic, so the chain may be written in any order — and calling it twice finds no method, because the second call would need a builder whose slot is still `Missing`.
     let required_setters = required.iter().map(|target| {
         let (name, ty) = (&target.name, &target.ty);
-        let others: Vec<&Ident> = slots
+        let others: Vec<TokenStream2> = slots
             .iter()
             .enumerate()
             .filter(|(i, _)| required[*i].name != target.name)
-            .map(|(_, s)| s)
+            .map(|(_, s)| quote! { #s })
             .collect();
         let render = |set: bool| {
-            angled(required.iter().enumerate().map(|(i, p)| {
-                let (slot, marker) = (&slots[i], &markers[i]);
-                match (p.name == target.name, set) {
-                    (true, true) => quote! { #ty },
-                    (true, false) => quote! { #marker },
-                    (false, _) => quote! { #slot },
-                }
-            }))
+            with_own(
+                false,
+                required
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| {
+                        let (slot, marker) = (&slots[i], &markers[i]);
+                        match (p.name == target.name, set) {
+                            (true, true) => quote! { #ty },
+                            (true, false) => quote! { #marker },
+                            (false, _) => quote! { #slot },
+                        }
+                    })
+                    .collect(),
+            )
         };
         let (before, after) = (render(false), render(true));
         let (param, stored) = target.setter_param();
@@ -438,9 +475,9 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
                 false => quote! { #field: self.#field },
             }
         });
-        let others = angled(others.iter().map(|s| quote! { #s }));
+        let others = with_own(true, others);
         quote! {
-            impl #others #builder #before {
+            impl #others #builder #before #where_clause {
                 pub fn #name(self, value: #param) -> #builder #after {
                     #builder { #(#carried),* }
                 }
@@ -461,8 +498,27 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         quote! { #field: ::core::clone::Clone::clone(&self.#field) }
     });
 
-    let schema = props_schema::expand(name, &props_schema::doc_of(&input.attrs), &props);
-    let actions = preview_actions(name, &builder, &generics, &props);
+    // A call's placement check names the props type without its parameters, which nothing at the check infers: the constant stands on the one instance with every parameter `()`, so the path resolves to it.
+    let in_flow_on = angled(named.iter().map(|_| quote! { () }));
+
+    let schema = props_schema::expand(
+        name,
+        &input.generics,
+        &props_schema::doc_of(&input.attrs),
+        &props,
+    );
+    let actions = preview_actions(
+        name,
+        &builder,
+        PreviewGenerics {
+            own_declared: &own_declared,
+            own: &own,
+            declared: &declared_generics,
+            named: &generics,
+            where_clause,
+        },
+        &props,
+    );
 
     Ok(quote! {
         #(
@@ -471,34 +527,36 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
             #vis struct #markers;
         )*
 
-        #vis struct #builder #generics {
+        #vis struct #builder #declared_generics #where_clause {
             #(#fields),*
         }
 
-        impl #name {
+        impl #name #in_flow_on {
             /// Whether the item the component returns stands where its call does, so a call may place it (`width:`, `grow:`, `self:`): false for one drawn on a layer of its own.
             #[doc(hidden)]
             pub const IN_FLOW: bool = #in_flow;
+        }
 
+        impl #own_declared #name #own #where_clause {
             /// Starts a props builder. Every optional prop already holds its default; a required one holds the `Missing` marker, and `build` does not exist until none are left.
             pub fn props() -> #builder #all_missing {
                 #builder { #(#seeded),* }
             }
         }
 
-        impl #generics #builder #generics {
+        impl #declared_generics #builder #generics #where_clause {
             #(#optional_setters)*
         }
 
         #(#required_setters)*
 
-        impl #builder #all_set {
-            pub fn build(self) -> #name {
+        impl #own_declared #builder #all_set #where_clause {
+            pub fn build(self) -> #name #own {
                 #name { #(#moved),* }
             }
         }
 
-        impl ::core::clone::Clone for #name {
+        impl #own_declared ::core::clone::Clone for #name #own #where_clause {
             fn clone(&self) -> Self {
                 #name { #(#cloned),* }
             }
@@ -519,27 +577,43 @@ fn angled(args: impl Iterator<Item = TokenStream2>) -> TokenStream2 {
     }
 }
 
+/// The parameter lists the preview actions are written over: the struct's own, declared and named, and the builder's, which add the slots.
+struct PreviewGenerics<'a> {
+    own_declared: &'a TokenStream2,
+    own: &'a TokenStream2,
+    declared: &'a TokenStream2,
+    named: &'a TokenStream2,
+    where_clause: &'a Option<syn::WhereClause>,
+}
+
 /// Emits, wrapped in `telar::__previews!`, the builder's `__preview_actions` over the optional props, callable in any builder state, and the props' `PreviewActions` over every prop.
 ///
 /// Every prop goes through the action probe rather than only those whose type is written as a `Fn`, so a callback reached through a type alias is logged too, and a prop that is no callback comes back as it was.
 fn preview_actions(
     name: &Ident,
     builder: &Ident,
-    generics: &TokenStream2,
+    generics: PreviewGenerics<'_>,
     props: &[Prop],
 ) -> TokenStream2 {
+    let PreviewGenerics {
+        own_declared,
+        own,
+        declared,
+        named,
+        where_clause,
+    } = generics;
     let optional: Vec<&Prop> = props.iter().filter(|p| !p.is_required()).collect();
     let all: Vec<&Prop> = props.iter().collect();
     let builder_fn = logging_fn(quote! { pub fn __preview_actions }, &optional);
     let props_fn = logging_fn(quote! { fn preview_actions }, &all);
     quote! {
         ::telar::__previews! {
-            impl #generics #builder #generics {
+            impl #declared #builder #named #where_clause {
                 #[doc(hidden)]
                 #builder_fn
             }
 
-            impl ::telar::preview::PreviewActions for #name {
+            impl #own_declared ::telar::preview::PreviewActions for #name #own #where_clause {
                 #props_fn
             }
         }
@@ -581,12 +655,22 @@ fn collect(input: &DeriveInput) -> Result<Vec<Prop>, syn::Error> {
         ));
     };
 
-    // The builder's slots and markers name the struct without its parameters, and a static schema cannot depend on them either.
-    if !input.generics.params.is_empty() {
-        return Err(syn::Error::new(
-            input.generics.span(),
-            "a props struct takes no generic parameters: a tag names one props type, and its builder and schema are written for that one type",
-        ));
+    for param in &input.generics.params {
+        match param {
+            syn::GenericParam::Type(param) if param.default.is_some() => {
+                return Err(syn::Error::new(
+                    param.span(),
+                    "a props struct's type parameter takes no default: a call infers it from the props it is handed",
+                ));
+            }
+            syn::GenericParam::Type(_) => {}
+            _ => {
+                return Err(syn::Error::new(
+                    param.span(),
+                    "a props struct takes type parameters only: a lifetime or a constant has no place in props a closure may run again with",
+                ));
+            }
+        }
     }
 
     named.named.iter().map(read_prop).collect()

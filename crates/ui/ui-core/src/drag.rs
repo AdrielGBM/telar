@@ -56,13 +56,110 @@ impl<T: Clone + 'static> GestureTransaction for Transaction<T> {
     }
 }
 
-/// A drag that opened its own transaction and can still be cancelled from outside the tree.
+/// A drag that opened its own transaction, or a stroke [held](hold_stroke) past the box that started it, and can still be cancelled from outside the tree.
 struct Live {
     id: u64,
     // The surface whose events may cancel it: Escape or a press on one window says nothing about a stroke in another.
     surface: Option<SurfaceHandle>,
     button: PointerButton,
     cancel: Handler,
+    /// What a held stroke is told of the pointer: `None` for a box's own drag, which hears the pointer through the tree.
+    follow: Option<Rc<dyn Fn(Held)>>,
+}
+
+/// What a [held stroke](hold_stroke) hears of the pointer that carries it, in surface coordinates.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Held {
+    Moved((f32, f32)),
+    /// Let go: the stroke is over, and it hears nothing more.
+    Released((f32, f32)),
+    /// Escape, another button or the window losing focus ended it: it hears nothing more.
+    Cancelled,
+}
+
+/// A stroke that keeps hearing the pointer for as long as this is kept, whatever box started it: dropping it lets the stroke go without telling it anything.
+pub(crate) struct HeldStroke {
+    id: u64,
+}
+
+impl Drop for HeldStroke {
+    fn drop(&mut self) {
+        let id = self.id;
+        LIVE.with(|l| l.borrow_mut().retain(|live| live.id != id));
+    }
+}
+
+/// Holds the stroke `button` is drawing on the active surface, so `follow` hears each move and the release ahead of the tree, and the cancel that Escape, another button or the window losing focus make, until one of those ends it or the guard is dropped.
+///
+/// What lets a stroke outlive the box it began on: a row of a list that builds only the rows on screen is dropped once it scrolls away, and a stroke heard through it would go with it.
+pub(crate) fn hold_stroke(button: PointerButton, follow: impl Fn(Held) + 'static) -> HeldStroke {
+    let follow: Rc<dyn Fn(Held)> = Rc::new(follow);
+    let id = next_live();
+    let cancel = {
+        let follow = Rc::clone(&follow);
+        Handler::from(move || follow(Held::Cancelled))
+    };
+    LIVE.with(|l| {
+        l.borrow_mut().push(Live {
+            id,
+            surface: reactive_core::current_surface(),
+            button,
+            cancel,
+            follow: Some(follow),
+        })
+    });
+    HeldStroke { id }
+}
+
+/// Tells the held strokes on the active surface what `event` says of their pointer, before anything else sees it: a move, the release of the button that holds one, or the window losing focus, which cancels them.
+pub(crate) fn follow_held(event: &Event) {
+    let surface = reactive_core::current_surface();
+    let (told, heard): (Vec<Rc<dyn Fn(Held)>>, Held) = match event {
+        Event::PointerMoved { x, y, .. } => (
+            LIVE.with(|l| {
+                l.borrow()
+                    .iter()
+                    .filter(|live| live.surface == surface)
+                    .filter_map(|live| live.follow.clone())
+                    .collect()
+            }),
+            Held::Moved((*x as f32, *y as f32)),
+        ),
+        Event::PointerReleased { x, y, button, .. } => (
+            take_held(|live| live.surface == surface && live.button == *button),
+            Held::Released((*x as f32, *y as f32)),
+        ),
+        Event::FocusChanged { is_focused: false } => {
+            (take_held(|live| live.surface == surface), Held::Cancelled)
+        }
+        _ => return,
+    };
+    for follow in told {
+        follow(heard);
+    }
+}
+
+/// Withdraws the held strokes `which` picks, handing back what each is told through.
+fn take_held(which: impl Fn(&Live) -> bool) -> Vec<Rc<dyn Fn(Held)>> {
+    LIVE.with(|l| {
+        let mut taken = Vec::new();
+        l.borrow_mut()
+            .retain(|live| match (&live.follow, which(live)) {
+                (Some(follow), true) => {
+                    taken.push(Rc::clone(follow));
+                    false
+                }
+                _ => true,
+            });
+        taken
+    })
+}
+
+fn next_live() -> u64 {
+    NEXT_LIVE.with(|n| {
+        n.set(n.get() + 1);
+        n.get()
+    })
 }
 
 /// Cancels the most recently started transacted drag on the active surface: its transaction reverts and its `on_drag_cancel` runs. What Escape does before anything else sees it.
@@ -270,16 +367,14 @@ impl DragGesture {
                 }
             })
         };
-        let id = NEXT_LIVE.with(|n| {
-            n.set(n.get() + 1);
-            n.get()
-        });
+        let id = next_live();
         LIVE.with(|l| {
             l.borrow_mut().push(Live {
                 id,
                 surface: reactive_core::current_surface(),
                 button,
                 cancel: cancel.clone(),
+                follow: None,
             })
         });
         self.stroke = Some(Stroke {

@@ -48,14 +48,15 @@ session.area(
 );
 ```
 
-`ReorderGroup` in `telar-components` is built on a session: its containers are areas and its items are items,
-so a list made with it takes payloads from any other widget of the same session and gives its own to them.
+`ReorderGroup` and `TreeDrag` in `telar-components` are built on a session: a group's containers and a tree's
+rows are areas, and their items and rows are items, so a list or a tree made with them takes payloads from any
+other widget of the same session and gives its own to them.
 
 ## Items
 
 `session.item(container, DragItem::new(payload))` makes a `StyledContainer` an item. It sets the box's drag
-handlers, threshold and transaction, so none of them is set on it elsewhere, and shows the grab cursor over it
-and the grabbing one while it is the item carried.
+handlers and threshold, so neither is set on it elsewhere, and shows the grab cursor over it and the grabbing one
+while it is the item carried.
 
 | `DragItem` | Says |
 | --- | --- |
@@ -63,6 +64,16 @@ and the grabbing one while it is the item carried.
 | `label(f)` | What the payload is called, read as the drag starts, for whoever draws the label beside the pointer. |
 | `threshold(px)` | How far the pointer travels before a press is a drag rather than a click. 4 px unless set. |
 | `on_detach(f)` | Told the payload and where on the surface it was let go, when it is let go over no area that accepts it. |
+| `along(axis)` | The payload is carried along `axis` only: across it, the pointer counts as staying where it picked it up. |
+| `within(f)` | The payload is carried inside the rect `f` answers, in the space the item is laid out in, read at each move. |
+
+The item only starts the stroke. Once a press on it travels past its threshold, the session holds the stroke
+itself: it hears every move and the release ahead of the widget tree, whichever box the pointer is over, until the
+payload is let go or the drag is cancelled. So the item may go away mid-stroke and the payload is still carried to
+where it is let go: a row of a list that builds only the rows on screen is dropped once the list scrolls it out of
+view under a held pointer, and a tree's row carried to the far end of the tree is one. `carried_from()` keeps
+naming the box the drag started on, so a widget that builds its items again knows its own payload by a key of its
+own rather than by the box.
 
 ## Areas
 
@@ -92,6 +103,13 @@ own way of counting items maps it (`ReorderGroup` reports a `DropPlace<Slot>`).
 session's hold delay (700 ms unless `DragSession::hold_delay` says otherwise): once per stay, whatever the area
 accepts there, which is what opens a collapsed folder held over. Moving to another item starts the wait again.
 
+While a payload is carried the session watches every area: its box as layout places it, and whatever signals its
+`layout` reads. When either changes, the pointer is measured again where it stands, so what it is over follows
+the areas moving under a pointer that does not: the rows a folder opened by `on_hold` pushes down, a row the app
+added, a list grown under the pointer. Reading the rows' signals with `get` in `layout` is what lets the session
+see them change before the next layout pass; one read with `peek` is measured again once the area's box is laid
+out anew.
+
 ## What a widget draws
 
 The session draws nothing. Each widget reads it, reactively, and draws its own indicator:
@@ -106,7 +124,50 @@ The session draws nothing. Each widget reads it, reactively, and draws its own i
 
 `ReorderGroup` draws a line at a gap, highlights an item a payload would land onto, and with `label(f)` shows
 the label beside the pointer, in an overlay that takes no pointer (`Overlay::click_through`), so it stays
-readable once the payload has left the scroll area that clips its item.
+readable once the payload has left the scroll area that clips its item. A tree does the same for its rows, with
+the line set in to the level of the nodes the gap lies among, and always shows its own row's label.
+
+## A tree
+
+`tree_view` takes part in a session through its `drag` prop, a `TreeDrag` made of the session and three of the
+app's functions over its own types: what a row carries, whether a payload may land at a place, and what to do when
+one did.
+
+```rust
+use telar_components::{TreeDrag, TreeNode, TreeTarget, TreeViewProps, tree_view};
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum LibraryNode {
+    Folder(FolderId),
+    Text(TextId),
+    Section(SectionId),
+}
+
+let drag = TreeDrag::new(
+    &session,
+    |node: &TreeNode<LibraryNode>| Some(Carried::Node(node.id)),
+    |carried: &Carried, target: &TreeTarget<LibraryNode>| match (carried, target) {
+        (Carried::Segment(_), TreeTarget::Inside(LibraryNode::Section(_))) => true,
+        (Carried::Node(LibraryNode::Text(_)), TreeTarget::Inside(LibraryNode::Folder(_))) => true,
+        (Carried::Node(_), TreeTarget::Between { .. }) => true,
+        _ => false,
+    },
+    move |carried, target| move_to(carried, target),
+);
+let tree = tree_view(TreeViewProps::props().items(nodes).drag(drag).build())?;
+```
+
+A place is reported as a `TreeTarget` in the tree's keys, never as a row of what it happens to show:
+`Inside(key)` onto a node, a branch to go into or a leaf that takes what is dropped on it, and
+`Between { parent, after, before }` for the gap among the nodes under `parent` (`None` for the top level), after
+the sibling `after` and before the sibling `before`, `None` at either end. The gap before a row is among that row's
+siblings, and the gap after the last row is at the end of the top level; dropping onto a branch is how a node goes
+in after what the branch holds.
+
+The tree refuses one thing itself: a node of its own into itself or anything under it. A node let go in the gap
+it came out of is not reported. Held over a shut branch, the pointer opens it, and the rows it shows are measured
+again under the pointer. A branch is any node built `with_children`, an empty list included, so an empty folder
+opens and is dropped into like any other.
 
 ## Scrolling near an edge
 
@@ -120,15 +181,18 @@ After each step the pointer is measured again against what scrolled under it.
 ## Ending a drag
 
 Letting go drops the payload on the area under the pointer, or tells the item it was let go over none. Escape,
-another button pressed mid-stroke or the window losing focus cancels it: the drag's transaction puts the
-session back as it was before the press, and the scroll and the hold stop.
+another button pressed mid-stroke or the window losing focus cancels it: the session is back as it was before
+the press, nothing is dropped, and the scroll and the hold stop. A press that carried nothing yet, one that never
+travelled past its item's threshold, is a click on the item.
 
 ## The keyboard
 
 A session is the pointer's. A widget moves its items with keys of its own and reports the move the way a drop
 is reported, so the app has one place to act on either. `ReorderGroup` steps the focused item one gap earlier or
-later with Alt+↑ and Alt+↓ and takes no other key: Enter, Space and the bare arrows stay the app's, so a row
-can open on Enter.
+later with Alt+↑ and Alt+↓. Its `on_activate(f)` is told which item a click or Enter opened; without it the group
+takes no other key, so Enter, Space and the bare arrows stay the app's. A tree walks only on bare arrows, Home,
+End, Page Up and Page Down, and asks its `on_key` about every key first, so Alt+↑ and Alt+↓ moving a node are the
+app's to write and report as a drop would be.
 
 ## Targets
 
@@ -140,4 +204,7 @@ every target shares.
 | web-dom | A scroll area whose content the document scrolls is asked for its offset rather than set, so the areas are measured against the scrolled content once the document reports where it put it. |
 | Android, touch on any target | A press on an item inside a scroll area is taken by the item once it travels past the threshold, as on a desktop: the finger drags the item, not the list. |
 | TUI | The same, on the cell grid. |
-| headless | The same. `telar::testing::route` with presses and moves drives a stroke, and `advance_time` lets the hold delay and the scroll steps pass; a play's `drag` carries an item in one step. |
+| headless | The same. `telar::testing::route` with presses and moves drives a stroke, and `advance_time` lets the hold delay and the scroll steps pass; a play's `drag` carries an item in one step. The session hears a stroke through the overlay dispatch every runner and `route` call before the tree, so events handed straight to a box's `on_event` pick a payload up and never carry it. |
+
+The grabbing cursor is the item's: once a row the session carries has scrolled out of the rows built, the pointer
+shows the cursor of whatever it is over until the payload is let go.

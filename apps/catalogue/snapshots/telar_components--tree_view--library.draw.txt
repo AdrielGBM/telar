@@ -1,0 +1,122 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element tree
+            clip 270,140 260x320
+              matrix 1,0,0,1,270,140
+                element group
+                  element group
+                    element treeitem
+                      rect 4,0 252x36 radius=6
+                      element group
+                        element group
+                          matrix 1,0,0,1,14,15
+                            path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#171a2eb3
+                          end
+                        end
+                      end
+                      element group
+                        rect 32,10 16x16
+                        element group
+                          matrix 1,0,0,1,32,10
+                            path M13.33,13.33 C14.07,13.33 14.67,12.74 14.67,12 L14.67,5.33 C14.67,4.6 14.07,4 13.33,4 L8.07,4 C7.61,4 7.19,3.78 6.94,3.4 L6.4,2.6 C6.15,2.23 5.74,2 5.29,2 L2.67,2 C1.93,2 1.33,2.6 1.33,3.33 L1.33,12 C1.33,12.74 1.93,13.33 2.67,13.33 Z stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                          end
+                        end
+                      end
+                      element group
+                        clip 52,0 196x36
+                          matrix 1,0,0,1,52,0
+                            text 0,10 196x16.8 "Reading" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,36 252x36 radius=6
+                      element group
+                      end
+                      element group
+                        rect 48,46 16x16
+                        element group
+                          matrix 1,0,0,1,48,46
+                            path M10,1.33 L4,1.33 C3.26,1.33 2.67,1.93 2.67,2.67 L2.67,13.33 C2.67,14.07 3.26,14.67 4,14.67 L12,14.67 C12.74,14.67 13.33,14.07 13.33,13.33 L13.33,4.67 Z stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                            path M9.33,1.33 L9.33,4 C9.33,4.74 9.93,5.33 10.67,5.33 L13.33,5.33 M6.67,6 L5.33,6 M10.67,8.67 L5.33,8.67 M10.67,11.33 L5.33,11.33 stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                          end
+                        end
+                      end
+                      element group
+                        clip 68,36 180x36
+                          matrix 1,0,0,1,68,36
+                            text 0,10 180x16.8 "Rashomon" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,72 252x36 fill=#00000014 border=2 border-color=#4261edff radius=6
+                      rect 6,74 248x32 border=1 border-color=#ffffffff radius=4
+                      element group
+                        element group
+                          matrix 1,0,0,1,14,87
+                            path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#171a2eb3
+                          end
+                        end
+                      end
+                      element group
+                        rect 32,82 16x16
+                        element group
+                          matrix 1,0,0,1,32,82
+                            path M13.33,13.33 C14.07,13.33 14.67,12.74 14.67,12 L14.67,5.33 C14.67,4.6 14.07,4 13.33,4 L8.07,4 C7.61,4 7.19,3.78 6.94,3.4 L6.4,2.6 C6.15,2.23 5.74,2 5.29,2 L2.67,2 C1.93,2 1.33,2.6 1.33,3.33 L1.33,12 C1.33,12.74 1.93,13.33 2.67,13.33 Z stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                          end
+                        end
+                      end
+                      element group
+                        clip 52,72 196x36
+                          matrix 1,0,0,1,52,72
+                            text 0,10 196x16.8 "Archive" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                    element treeitem
+                      rect 4,108 252x36 radius=6
+                      element group
+                      end
+                      element group
+                        rect 48,118 16x16
+                        element group
+                          matrix 1,0,0,1,48,118
+                            path M10,1.33 L4,1.33 C3.26,1.33 2.67,1.93 2.67,2.67 L2.67,13.33 C2.67,14.07 3.26,14.67 4,14.67 L12,14.67 C12.74,14.67 13.33,14.07 13.33,13.33 L13.33,4.67 Z stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                            path M9.33,1.33 L9.33,4 C9.33,4.74 9.93,5.33 10.67,5.33 L13.33,5.33 M6.67,6 L5.33,6 M10.67,8.67 L5.33,8.67 M10.67,11.33 L5.33,11.33 stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                          end
+                        end
+                      end
+                      element group
+                        clip 68,108 180x36
+                          matrix 1,0,0,1,68,108
+                            text 0,10 180x16.8 "Notes" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          end
+                        end
+                      end
+                    end
+                  end
+                  element group
+                    rect 12,0 244x2
+                  end
+                  element group
+                    element group
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

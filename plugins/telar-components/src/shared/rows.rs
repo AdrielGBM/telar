@@ -17,6 +17,11 @@ pub(crate) use paint::{RowState, cursor_ring, row_wash};
 /// How far past the view's edge a row may end and still count as shown whole when paging: rows are drawn snapped to whole pixels, and the offsets a page is worked out from are sums of fractional heights, so a run of rows that exactly fills the view would otherwise fit or not by rounding noise.
 const WHOLE_SLACK: f32 = 0.5;
 
+/// What a list of rows, or a tree of nodes, names each one by: the caller's own id, an enum of the ids it has, anything it can compare and hash, so it never writes its ids out as text for a widget to hand back.
+pub trait RowKey: Clone + Eq + Hash + 'static {}
+
+impl<K: Clone + Eq + Hash + 'static> RowKey for K {}
+
 /// The presented control of each row that is built, by the key the list names its rows by: what a cursor resting on a row names to a reader, and nothing for a row scrolled out of the built window.
 pub(crate) struct BuiltRows<K: 'static>(RwSignal<HashMap<K, FocusId>>);
 
@@ -227,6 +232,11 @@ impl RowPlaces {
             Some(_) => telar::TextWrap::Wrap,
             None => telar::TextWrap::NoWrap,
         }
+    }
+
+    /// Where row `index` starts below the first row's top, and how tall it is, built or not: a measured row not yet built stands at the estimate.
+    pub(crate) fn span(&self, index: usize) -> (f32, f32) {
+        (self.top(index) - self.header, self.height_of(index))
     }
 
     fn top(&self, index: usize) -> f32 {

@@ -11,7 +11,7 @@ pub(super) fn tree(
     entries: &[PreviewEntry],
     query: &str,
     badge: impl Fn(&PreviewEntry) -> Option<String>,
-) -> Vec<TreeNode> {
+) -> Vec<TreeNode<Arc<str>>> {
     let by_package = spans_packages(entries);
     let mut root = Vec::new();
     for entry in entries.iter().filter(|entry| matches(query, entry)) {
@@ -29,10 +29,10 @@ pub(crate) fn listed(entries: &[PreviewEntry], query: &str) -> Vec<PreviewEntry>
         .collect()
 }
 
-fn collect_leaves(nodes: &[TreeNode], ids: &mut Vec<Arc<str>>) {
+fn collect_leaves(nodes: &[TreeNode<Arc<str>>], ids: &mut Vec<Arc<str>>) {
     for node in nodes {
         if node.is_branch() {
-            collect_leaves(&node.children, ids);
+            collect_leaves(node.child_nodes(), ids);
         } else {
             ids.push(node.id.clone());
         }
@@ -51,13 +51,13 @@ pub(crate) fn groups_holding(entries: &[PreviewEntry], id: &str) -> Vec<Arc<str>
     path
 }
 
-fn path_to(nodes: &[TreeNode], id: &str, path: &mut Vec<Arc<str>>) -> bool {
+fn path_to(nodes: &[TreeNode<Arc<str>>], id: &str, path: &mut Vec<Arc<str>>) -> bool {
     nodes.iter().any(|node| {
         if !node.is_branch() {
             return *node.id == *id;
         }
         path.push(node.id.clone());
-        let found = path_to(&node.children, id, path);
+        let found = path_to(node.child_nodes(), id, path);
         if !found {
             path.pop();
         }
@@ -107,16 +107,16 @@ impl Group {
         self.previews.len() + self.groups.iter().map(Group::count).sum::<usize>()
     }
 
-    fn node(&self, badge: &impl Fn(&PreviewEntry) -> Option<String>) -> TreeNode {
+    fn node(&self, badge: &impl Fn(&PreviewEntry) -> Option<String>) -> TreeNode<Arc<str>> {
         let groups = self.groups.iter().map(|group| group.node(badge));
         let previews = self.previews.iter().map(|entry| {
-            let leaf = TreeNode::new(entry.id, entry.name);
+            let leaf = TreeNode::new(Arc::from(entry.id), entry.name);
             match badge(entry) {
                 Some(badge) => leaf.with_badge(badge),
                 None => leaf,
             }
         });
-        TreeNode::new(self.path.as_str(), self.label)
+        TreeNode::new(Arc::from(self.path.as_str()), self.label)
             .with_badge(self.count().to_string())
             .with_children(groups.chain(previews))
     }

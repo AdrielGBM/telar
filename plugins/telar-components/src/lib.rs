@@ -122,6 +122,7 @@ pub use overlays::toast::toast::{
 };
 pub use overlays::tooltip::tooltip::{TooltipProps, TooltipTokens, tooltip};
 pub use shared::DOUBLE_CLICK;
+pub use shared::rows::RowKey;
 pub use shared::selection::SelectionMode;
 pub use workbench::code_view::code_view::{
     CodeSpan, CodeViewProps, CodeViewTokens, TokenKind, TokenStyler, code_view,
@@ -139,8 +140,9 @@ pub use workbench::split_pane::split_pane::{
     PaneLimit, SizedPane, SplitDirection, SplitPaneProps, SplitPaneTokens, SplitRegion, split_pane,
 };
 pub use workbench::toolbar::toolbar::{ToolbarProps, toolbar};
+pub use workbench::tree_view::tree_drag::{TreeDrag, TreeTarget};
 pub use workbench::tree_view::tree_view::{
-    TrailingBuilder, TreeContext, TreeNode, TreeViewProps, TreeViewTokens, tree_view,
+    TreeContext, TreeKeyHandler, TreeNode, TreeRowBuilder, TreeViewProps, TreeViewTokens, tree_view,
 };
 
 /// The geometry, washes, type and marks every catalogue control is drawn from, for an application drawing controls of its own that have to sit beside the catalogue's.

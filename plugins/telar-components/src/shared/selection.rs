@@ -1,10 +1,11 @@
 //! [`SelectionMode`], and what a list or a table that walks its rows with a cursor keeps of the rows chosen: one row, or any number of them and the row a Shift range runs from.
 
 use std::cell::RefCell;
-use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::collections::HashSet;
 
 use telar::{Handler, ModifiersState, RwSignal, signal};
+
+use crate::shared::rows::RowKey;
 
 /// How many rows of a [`virtual_list`](crate::virtual_list) or a [`data_table`](crate::data_table) can be chosen at once.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, telar::PreviewArg)]
@@ -44,26 +45,26 @@ impl Gesture {
 }
 
 /// The rows chosen, by id, and in [`SelectionMode::Multiple`] the row a Shift range runs from.
-pub(crate) struct RowSelection {
+pub(crate) struct RowSelection<K: RowKey> {
     mode: SelectionMode,
-    one: RwSignal<Option<Arc<str>>>,
-    many: RwSignal<BTreeSet<Arc<str>>>,
-    anchor: RefCell<Option<Arc<str>>>,
-    on_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
+    one: RwSignal<Option<K>>,
+    many: RwSignal<HashSet<K>>,
+    anchor: RefCell<Option<K>>,
+    on_change: Option<Handler<fn(HashSet<K>)>>,
 }
 
-impl RowSelection {
+impl<K: RowKey> RowSelection<K> {
     /// A selection in `mode`, kept in `one` while it is [`Single`](SelectionMode::Single) and in `many` while it is [`Multiple`](SelectionMode::Multiple), each a signal of its own where the caller bound none.
     pub(crate) fn new(
         mode: SelectionMode,
-        one: Option<RwSignal<Option<Arc<str>>>>,
-        many: Option<RwSignal<BTreeSet<Arc<str>>>>,
-        on_change: Option<Handler<fn(BTreeSet<Arc<str>>)>>,
+        one: Option<RwSignal<Option<K>>>,
+        many: Option<RwSignal<HashSet<K>>>,
+        on_change: Option<Handler<fn(HashSet<K>)>>,
     ) -> Self {
         Self {
             mode,
             one: one.unwrap_or_else(|| signal(None)),
-            many: many.unwrap_or_else(|| signal(BTreeSet::new())),
+            many: many.unwrap_or_else(|| signal(HashSet::new())),
             anchor: RefCell::default(),
             on_change,
         }
@@ -78,18 +79,15 @@ impl RowSelection {
     }
 
     /// Whether the row `id` is chosen, subscribing the caller to the selection.
-    pub(crate) fn is_selected(&self, id: &str) -> bool {
+    pub(crate) fn is_selected(&self, id: &K) -> bool {
         match self.mode {
-            SelectionMode::Single => self.one.with(|one| one.as_deref() == Some(id)),
+            SelectionMode::Single => self.one.with(|one| one.as_ref() == Some(id)),
             SelectionMode::Multiple => self.many.with(|many| many.contains(id)),
         }
     }
 
     /// The first of `ids` that is chosen, read without subscribing: where a cursor arriving at the rows starts.
-    pub(crate) fn first_of<'a>(
-        &self,
-        mut ids: impl Iterator<Item = &'a Arc<str>>,
-    ) -> Option<Arc<str>> {
+    pub(crate) fn first_of<'a>(&self, mut ids: impl Iterator<Item = &'a K>) -> Option<K> {
         match self.mode {
             SelectionMode::Single => {
                 let one = self.one.peek()?;
@@ -97,12 +95,12 @@ impl RowSelection {
             }
             SelectionMode::Multiple => self
                 .many
-                .peek_with(|many| ids.find(|id| many.contains(&***id)).cloned()),
+                .peek_with(|many| ids.find(|id| many.contains(*id)).cloned()),
         }
     }
 
     /// Makes `id` the row a Shift range runs from.
-    pub(crate) fn anchor_at(&self, id: &Arc<str>) {
+    pub(crate) fn anchor_at(&self, id: &K) {
         *self.anchor.borrow_mut() = Some(id.clone());
     }
 
@@ -110,9 +108,9 @@ impl RowSelection {
     pub(crate) fn apply(
         &self,
         gesture: Gesture,
-        id: &Arc<str>,
-        order: impl FnOnce() -> Vec<Arc<str>>,
-        from: Option<&Arc<str>>,
+        id: &K,
+        order: impl FnOnce() -> Vec<K>,
+        from: Option<&K>,
     ) {
         match gesture {
             Gesture::Only => self.only(id),
@@ -121,7 +119,7 @@ impl RowSelection {
         }
     }
 
-    pub(crate) fn only(&self, id: &Arc<str>) {
+    pub(crate) fn only(&self, id: &K) {
         self.anchor_at(id);
         match self.mode {
             SelectionMode::Single => self.one.set(Some(id.clone())),
@@ -132,23 +130,23 @@ impl RowSelection {
         }
     }
 
-    fn toggle(&self, id: &Arc<str>) {
+    fn toggle(&self, id: &K) {
         if !self.is_multiple() {
             return self.only(id);
         }
         self.anchor_at(id);
         self.change(|many| {
-            if !many.remove(&**id) {
+            if !many.remove(id) {
                 many.insert(id.clone());
             }
         });
     }
 
-    fn range(&self, id: &Arc<str>, order: &[Arc<str>], keep: bool, from: Option<&Arc<str>>) {
+    fn range(&self, id: &K, order: &[K], keep: bool, from: Option<&K>) {
         if !self.is_multiple() {
             return self.only(id);
         }
-        let at = |id: &Arc<str>| order.iter().position(|row| row == id);
+        let at = |id: &K| order.iter().position(|row| row == id);
         let Some(end) = at(id) else {
             return;
         };
@@ -167,14 +165,14 @@ impl RowSelection {
     }
 
     /// Chooses every row of `order`, or none of them once all are chosen. Nothing in [`SelectionMode::Single`].
-    pub(crate) fn all(&self, order: &[Arc<str>]) {
+    pub(crate) fn all(&self, order: &[K]) {
         if !self.is_multiple() {
             return;
         }
         self.change(|many| {
-            if order.iter().all(|id| many.contains(&**id)) {
+            if order.iter().all(|id| many.contains(id)) {
                 for id in order {
-                    many.remove(&**id);
+                    many.remove(id);
                 }
             } else {
                 many.extend(order.iter().cloned());
@@ -182,7 +180,7 @@ impl RowSelection {
         });
     }
 
-    fn change(&self, edit: impl FnOnce(&mut BTreeSet<Arc<str>>)) {
+    fn change(&self, edit: impl FnOnce(&mut HashSet<K>)) {
         let mut next = self.many.peek();
         edit(&mut next);
         if self.many.peek_with(|now| *now == next) {

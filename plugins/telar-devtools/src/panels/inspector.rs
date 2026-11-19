@@ -1,5 +1,7 @@
 //! The component inspector: what is mounted, as a tree, over the selected component's box.
 
+use std::sync::Arc;
+
 use telar::{
     Accessible, AlignItems, Children, Container, Insets, LayoutError, LayoutItem, LayoutStyle,
     Reactive, ReactiveList, Rect, Role, RwSignal, Size, Text, box_item, children, memo, signal,
@@ -10,7 +12,7 @@ use telar_components::{
     tree_view,
 };
 
-use super::tree_menu::TreeMenu;
+use super::tree_menu::{TreeMenu, with_any};
 use super::{count_mounted, mounted_while, number};
 use crate::inspect::{InspectedNode, Inspection};
 use crate::strings::{
@@ -84,7 +86,7 @@ fn components(inspection: Inspection) -> Result<Box<dyn LayoutItem>, LayoutError
 }
 
 /// Nests a pre-order walk by depth. Only what the tree shows goes in, so a walk whose rects moved and whose shape did not leaves the rows alone.
-pub(crate) fn tree_items(nodes: &[InspectedNode]) -> Vec<TreeNode> {
+pub(crate) fn tree_items(nodes: &[InspectedNode]) -> Vec<TreeNode<Arc<str>>> {
     let mut at = 0;
     let mut roots = Vec::new();
     while at < nodes.len() {
@@ -94,7 +96,7 @@ pub(crate) fn tree_items(nodes: &[InspectedNode]) -> Vec<TreeNode> {
     roots
 }
 
-fn level(nodes: &[InspectedNode], at: &mut usize, depth: usize) -> Vec<TreeNode> {
+fn level(nodes: &[InspectedNode], at: &mut usize, depth: usize) -> Vec<TreeNode<Arc<str>>> {
     let mut siblings = Vec::new();
     while let Some(node) = nodes.get(*at).filter(|node| node.depth == depth) {
         *at += 1;
@@ -102,8 +104,10 @@ fn level(nodes: &[InspectedNode], at: &mut usize, depth: usize) -> Vec<TreeNode>
             Some(next) if next.depth > depth => level(nodes, at, next.depth),
             _ => Vec::new(),
         };
-        siblings
-            .push(TreeNode::new(node.id.to_string(), node.name.clone()).with_children(children));
+        siblings.push(with_any(
+            TreeNode::new(Arc::from(node.id.to_string()), node.name.clone()),
+            children,
+        ));
     }
     siblings
 }

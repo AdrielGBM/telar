@@ -170,3 +170,56 @@ fn a_drag_says_where_the_press_that_armed_it_landed() {
         "and in the coordinates the box is laid out in"
     );
 }
+
+fn release_at(x: f32, y: f32) -> Event {
+    Event::PointerReleased {
+        x: x as f64,
+        y: y as f64,
+        button: PointerButton::Primary,
+        source: PointerSource::Mouse,
+    }
+}
+
+fn holding() -> (HeldStroke, Rc<RefCell<Vec<Held>>>) {
+    let heard = Rc::new(RefCell::new(Vec::new()));
+    let sink = heard.clone();
+    let held = hold_stroke(PointerButton::Primary, move |event| {
+        sink.borrow_mut().push(event)
+    });
+    (held, heard)
+}
+
+/// A held stroke hears the pointer whatever box it is over, until the button that holds it lets go, and nothing after.
+#[test]
+fn a_held_stroke_hears_each_move_and_its_release_then_nothing() {
+    let (_held, heard) = holding();
+    follow_held(&move_to(10.0, 20.0));
+    follow_held(&release_at(30.0, 40.0));
+    follow_held(&move_to(50.0, 60.0));
+    assert_eq!(
+        *heard.borrow(),
+        [Held::Moved((10.0, 20.0)), Held::Released((30.0, 40.0))]
+    );
+}
+
+#[test]
+fn escape_or_the_window_losing_focus_cancels_a_held_stroke() {
+    let (_held, heard) = holding();
+    assert!(cancel_live(), "Escape finds the stroke");
+    follow_held(&move_to(10.0, 20.0));
+    assert_eq!(*heard.borrow(), [Held::Cancelled]);
+
+    let (_held, heard) = holding();
+    follow_held(&Event::FocusChanged { is_focused: false });
+    follow_held(&release_at(10.0, 20.0));
+    assert_eq!(*heard.borrow(), [Held::Cancelled]);
+}
+
+#[test]
+fn a_held_stroke_let_go_of_hears_nothing_more() {
+    let (held, heard) = holding();
+    drop(held);
+    follow_held(&move_to(10.0, 20.0));
+    assert!(!cancel_live(), "nothing is left for Escape to cancel");
+    assert!(heard.borrow().is_empty());
+}

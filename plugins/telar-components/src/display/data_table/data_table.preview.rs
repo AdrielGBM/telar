@@ -1,5 +1,4 @@
-use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::collections::HashSet;
 
 use super::sample::Given;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
@@ -11,7 +10,7 @@ use crate::display::data_table::data_table::{
 use crate::shared::selection::SelectionMode;
 use telar::ControlSize;
 
-fn columns() -> Vec<Column> {
+fn columns() -> Vec<Column<String>> {
     vec![
         Column::new("name", "Name")
             .flex(2.0)
@@ -27,7 +26,7 @@ fn columns() -> Vec<Column> {
     ]
 }
 
-fn files() -> Vec<TableRow> {
+fn files() -> Vec<TableRow<String>> {
     const KINDS: [(&str, &str); 5] = [
         ("rs", "Rust"),
         ("toml", "Manifest"),
@@ -50,7 +49,7 @@ fn files() -> Vec<TableRow> {
         .collect()
 }
 
-fn task_columns() -> Vec<Column> {
+fn task_columns() -> Vec<Column<String>> {
     vec![
         Column::new("task", "Task")
             .flex(3.0)
@@ -61,7 +60,7 @@ fn task_columns() -> Vec<Column> {
     ]
 }
 
-fn tasks() -> Vec<TableRow> {
+fn tasks() -> Vec<TableRow<String>> {
     const TASKS: [(&str, &str, &str); 6] = [
         ("Ship the release notes", "Ada", "Mon"),
         (
@@ -99,7 +98,7 @@ fn framed(table: Box<dyn LayoutItem>) -> Result<Container, LayoutError> {
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
-        preview!(data_table: DataTableProps, "Files", |p| {
+        preview!(data_table: DataTableProps<String>, "Files", |p| {
             let table = data_table(
                 DataTableProps::props()
                     .on_sort(|_| {})
@@ -140,8 +139,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_value(by_role(Role::Splitter).named("Resize Name column"), 136.0)?;
             canvas.expect_action("on_sort", 1)
         }),
-        preview!(data_table: DataTableProps, "Several rows at once", |p| {
-            let chosen = BTreeSet::from([Arc::from("file-1")]);
+        preview!(data_table: DataTableProps<String>, "Several rows at once", |p| {
+            let chosen = HashSet::from(["file-1".to_string()]);
             let table = data_table(
                 DataTableProps::props()
                     .on_select(|_| {})
@@ -173,7 +172,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_action("on_selection_change", 4)?;
             canvas.expect_action("on_select", 1)
         }),
-        preview!(data_table: DataTableProps, "Wrapped cells", |p| {
+        preview!(data_table: DataTableProps<String>, "Wrapped cells", |p| {
             let table = data_table(
                 DataTableProps::props()
                     .on_select(|_| {})
@@ -201,7 +200,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.press(Key::Named(NamedKey::Enter))?;
             canvas.expect_action("on_select", 2)
         }),
-        preview!(data_table: DataTableProps, "Empty", |p| {
+        preview!(data_table: DataTableProps<String>, "Empty", |p| {
             let table = data_table(
                 DataTableProps::props()
                     .columns(columns())
