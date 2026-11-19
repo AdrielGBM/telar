@@ -832,7 +832,7 @@ impl ScrollViewport {
         self.area
     }
 
-    /// Scrolls so `item` starts at the viewport's top edge, as far as the content allows, and brings it into view across. Where a link to a place on the page leaves the reader: at the start of that place, not at whichever edge is nearest.
+    /// Scrolls so `item` starts at the viewport's top edge, as far as the content allows, and brings it into view across. Where a link to a place on the page leaves the reader: at the start of that place, not at whichever edge is nearest. A place too near the end to reach the top edge leaves the view at the end of the content, never past it.
     ///
     /// The top edge is the one the [`arrival_margin`](Self::arrival_margin) leaves, so a place arrived at under a bar fixed over the page starts just below the bar.
     ///
@@ -852,7 +852,8 @@ impl ScrollViewport {
         } else {
             at_x
         };
-        let target = (x.max(0.0), (item.y - margin.top).max(0.0));
+        let (max_x, max_y) = self.peek_ranges().unwrap_or((f32::INFINITY, f32::INFINITY));
+        let target = (x.clamp(0.0, max_x), (item.y - margin.top).clamp(0.0, max_y));
         self.scroll_to(target.0, target.1);
         Some(target)
     }

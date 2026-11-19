@@ -77,6 +77,12 @@ impl FixedLayer {
     pub fn content_node(&self) -> NodeId {
         self.content
     }
+
+    /// Keeps the layer's own layout style — the one [`new`](Self::new) took, which places its boxes against the surface — in step with the reactive state it was built from. The place where the layer was declared keeps taking no room.
+    pub fn styled_by(self, style: impl Fn() -> LayoutStyle + 'static) -> Self {
+        crate::styled_container::style_follows(self.content, style);
+        self
+    }
 }
 
 /// The layer's hook into priority pointer routing, sharing the widget's child handles.

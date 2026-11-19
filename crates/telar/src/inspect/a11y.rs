@@ -139,25 +139,28 @@ pub(crate) fn check_over(
     Report { violations }
 }
 
-/// A Tab stop as the keyboard reaches it: what a reader is told about it then, and the frame the canvas draws while it holds focus.
+/// A Tab stop as the keyboard reaches it: what a reader is told about it then, the frame the canvas draws while it holds focus, and the same canvas with nothing focused, scrolled as it is while the stop holds focus.
 #[derive(Clone, Debug)]
 pub struct FocusedStop {
     /// The stop as a reader is told about it while it holds focus.
     pub node: AccessNode,
-    /// The canvas while the stop holds focus.
+    /// The canvas while the stop holds focus, with the stop brought into view in every scroll it sits in.
     pub frame: Frame,
+    /// The canvas as [`frame`](Self::frame) draws it with nothing focused: what focus changed is judged against it.
+    pub rest: Frame,
 }
 
-/// Checks that each of `focused` shows where the keyboard is: `rest` is the same canvas with nothing focused.
+/// Checks that each of `focused` shows where the keyboard is, against its [`rest`](FocusedStop::rest).
 ///
 /// What the keyboard reaching a stop changes inside its box is its focus indicator. A ring is judged as the keyboard's ring is drawn, in two bands so that one of them always shows: the better band has to stand the [`ContrastUse::ControlBoundary`] minimum from the stop's fill and from what is around the ring. An indicator drawn as a change of fill alone has to stand as far from what was there before. A stop whose box looks the same focused or not shows nothing at all.
 ///
+/// Each stop is judged in view, whatever was on screen before the keyboard reached it, so a control far down a long page is judged by the ring it wears there and not by a clip or a page that draws only what is on screen.
+///
 /// A stop whose cursor rests on one of its items, as a menu's or a tree's does, shows the keyboard on that item: what is judged is what focus changes there.
-pub fn check_focus(rest: &Frame, focused: &[FocusedStop]) -> Report {
-    let before = Walk::of(rest);
+pub fn check_focus(focused: &[FocusedStop]) -> Report {
     let violations = focused
         .iter()
-        .filter_map(|stop| focus_indicator(&before, rest.background, stop))
+        .filter_map(|stop| focus_indicator(&Walk::of(&stop.rest), stop.rest.background, stop))
         .collect();
     Report { violations }
 }

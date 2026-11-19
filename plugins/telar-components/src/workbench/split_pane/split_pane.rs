@@ -26,7 +26,7 @@ const DEFAULT_STEP: f32 = 16.0;
 /// Every field left `None` follows the role named beside it, read when the splitter paints.
 #[derive(Clone, Debug, Default, PartialEq, telar::ComponentTokens)]
 pub struct SplitPaneTokens {
-    /// Width of the gap between the panes. The splitter is grabbed from a strip twice as wide, reaching half a gap over each pane and no further, so what a pane keeps at its edge, such as a scrollbar, stays its own. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm) at the regular size.
+    /// Width of the gap between the panes. The splitter is grabbed from a strip reaching half a gap over each pane, and further where a narrow gap needs it to be [`metrics::MIN_TARGET`](crate::metrics::MIN_TARGET) across, so a pointer target the size of any other control stands around the thin rule drawn in the gap; what a pane keeps at its edge past that, such as a scrollbar, stays its own. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm) at the regular size.
     #[token(or = || shared::gap_sm(ControlSize::Regular))]
     pub thickness: Option<f32>,
     /// Corner radius of the rule drawn in the gap. `None` is a pill.
@@ -513,8 +513,10 @@ fn bar_thickness() -> f32 {
     SplitPaneTokens::current().thickness()
 }
 
+/// How far past each side of the gap the splitter is grabbed: half a gap, or as far as a target [`shared::MIN_TARGET`] across needs.
 fn grab_reach() -> f32 {
-    bar_thickness() / 2.0
+    let gap = bar_thickness();
+    (gap / 2.0).max(shared::target_outset(gap))
 }
 
 fn grab_outset(direction: SplitDirection) -> Insets {

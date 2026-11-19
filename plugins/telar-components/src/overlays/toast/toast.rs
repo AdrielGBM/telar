@@ -403,8 +403,7 @@ pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             })
             .padding_all(shared::gap_xl(size))
     };
-    let layer = FixedLayer::new(layer_box(), children![region])?;
-    style_follows(layer.layout_node(), layer_box);
+    let layer = FixedLayer::new(layer_box(), children![region])?.styled_by(layer_box);
     Ok(box_item(layer))
 }
 

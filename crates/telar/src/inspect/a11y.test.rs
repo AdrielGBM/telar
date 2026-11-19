@@ -677,6 +677,40 @@ fn a_stop_has_to_show_where_the_keyboard_is() {
     assert_eq!(found(&report(theme_ring), Rule::FocusIndicator), 0);
 }
 
+/// A scroll with `ringed` stops one under another, further down than its view shows, so the play opens on the first and the rest are out of view.
+fn scrolled_out_of_view(ring: fn(Rect) -> RectStyle) -> Built {
+    let stops = (0..8)
+        .map(|_| {
+            let spacer = box_item(
+                Container::new(LayoutStyle::new().width(80.0).height(160.0), vec![]).unwrap(),
+            );
+            row(LayoutStyle::new().flex_column(), vec![spacer, ringed(ring)])
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let scroll = crate::LayoutScrollArea::new(
+        LayoutStyle::new().width(200.0).height(200.0),
+        column(stops)?,
+    )?;
+    Ok(box_item(scroll))
+}
+
+#[test]
+fn a_stop_out_of_view_is_judged_by_the_ring_it_wears_in_view() {
+    fn dark_ring(_: &PreviewCtx) -> Built {
+        scrolled_out_of_view(|_| RectStyle::default().with_border(Border::uniform(INK, 3.0)))
+    }
+    fn unchanged(_: &PreviewCtx) -> Built {
+        scrolled_out_of_view(|_| RectStyle::default().with_border(Border::uniform(INK, 1.0)))
+    }
+    let dark = report(dark_ring);
+    assert_eq!(found(&dark, Rule::FocusIndicator), 0, "{dark}");
+    assert_eq!(
+        found(&report(unchanged), Rule::FocusIndicator),
+        8,
+        "every stop that shows nothing is still found"
+    );
+}
+
 #[test]
 fn checking_focus_leaves_it_where_the_play_put_it() {
     fn pair(_: &PreviewCtx) -> Built {

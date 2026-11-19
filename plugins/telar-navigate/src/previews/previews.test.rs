@@ -45,3 +45,13 @@ fn the_stack_follows_its_screen_arg() {
     play.expect_text("Friday works for me.").unwrap();
     play.expect_no_text("Three unread messages.").unwrap();
 }
+
+#[test]
+fn every_play_passes() {
+    for entry in previews() {
+        let mut play = mount(&entry);
+        if let Err(error) = play.run() {
+            panic!("`{}`: {error}", entry.id);
+        }
+    }
+}

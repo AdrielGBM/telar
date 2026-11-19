@@ -306,11 +306,15 @@ impl Play {
     fn check_focus(&self) -> a11y::Report {
         let canvas = self.canvas();
         let order = canvas.with_entered(focus::tab_order);
-        canvas.with_entered(focus::clear);
-        self.settle_now();
-        let rest = self.frame();
         let mut focused = Vec::new();
         for stop in order {
+            // Brought into view before either frame is taken, so the stop is judged by what it draws on screen, wherever the play left the scroll and whatever a page leaves undrawn outside its view.
+            canvas.with_entered(|| {
+                focus::clear();
+                focus::perform(stop.id, focus::AccessAction::ScrollIntoView);
+            });
+            self.settle_now();
+            let rest = self.frame();
             canvas.with_entered(|| focus::request(stop.id));
             self.settle_now();
             let frame = self.frame();
@@ -325,10 +329,10 @@ impl Play {
                     .cloned()
             });
             if let Some(node) = node {
-                focused.push(a11y::FocusedStop { node, frame });
+                focused.push(a11y::FocusedStop { node, frame, rest });
             }
         }
-        a11y::check_focus(&rest, &focused)
+        a11y::check_focus(&focused)
     }
 
     /// Moves the pointer onto the node `query` matches, presses and releases it there.
@@ -580,7 +584,9 @@ impl Play {
     pub fn expect_accessible(&mut self) -> PlayResult {
         if let Some(reproduced) = self.replaying {
             return if self.steps.len() >= reproduced {
-                Err(PlayError::new("the replay reached the check it was made for"))
+                Err(PlayError::new(
+                    "the replay reached the check it was made for",
+                ))
             } else {
                 self.step(String::from("expect accessible"), Ok(()))
             };

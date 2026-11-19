@@ -33,7 +33,9 @@ puts a toolbar at the bottom centre. Percentages and `sw`/`sh` resolve against t
 - **From the first frame.** The layer is laid out at the surface's size on every pass, whether or not
   anything else has been laid out yet, so a bar that is part of the first frame is in place on it.
 - **Where it is declared it takes no room.** Its place in the page is a box of no size and out of the flow,
-  so it adds no gap to the column it sits in.
+  so it adds no gap to the column it sits in. A layer whose own style follows state keeps it that way with
+  `FixedLayer::styled_by(|| …)`, which restyles the layer against the surface and leaves its place alone:
+  `layout_node()` is that place, and a style set on it would put the layer's padding into the page.
 - **Safe area.** The layer spans the whole surface. A bar that has to stay clear of a notch pads itself with
   [`use_safe_area_insets()`](surface-size.md).
 - **The cascade starts over.** Like an overlay, a layer's content inherits from the surface rather than from

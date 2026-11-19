@@ -111,7 +111,9 @@ Following an anchor:
   fixed over the page the box lands just below the bar (see
   [docs/primary-scroll.md](primary-scroll.md#arrival-margin)). Nearest-edge scrolling is `ScrollViewport::reveal`, for
   keyboard selection; an anchor is a place, so it goes to the top the way a web fragment does. The scrolls are
-  found from the box itself (`scroll_viewports_of`), so the order the tree was built in does not matter.
+  found from the box itself (`scroll_viewports_of`), so the order the tree was built in does not matter. A box
+  too near the end of its scroll to reach the top leaves that scroll at its end, never past it, as a browser
+  does.
 - **Adds a history entry.** The current page with that fragment (`/es/#contact`) is pushed, so back returns to
   where the reader was and the address can be shared. Following the anchor already shown adds nothing.
 - **Keeps up with the page on arrival.** An address that names an anchor (a page loaded at `/es/#contact`, a

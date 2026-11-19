@@ -507,3 +507,34 @@ fn a_warning_or_an_error_interrupts_and_every_notice_says_its_tone() {
         Some((Role::Label, Some(Role::Status)))
     );
 }
+
+/// An app's shell: a column filling the window, its content growing into what is left, with the toaster declared last.
+#[test]
+fn the_toaster_takes_no_room_from_the_column_it_is_declared_in() {
+    let laid: Cell<Option<(telar::NodeId, telar::NodeId)>> = Cell::new(None);
+    let _mounted = Mounted::mount(ToastPlacement::BottomEnd, 3, |toaster| {
+        let content = Container::new(LayoutStyle::column().flex_grow(1.0), vec![])?;
+        let content_node = content.layout_node();
+        let shell = Container::new(
+            LayoutStyle::column()
+                .width(telar::SizeDimension::Percent(1.0))
+                .height(telar::SizeDimension::Percent(1.0)),
+            vec![box_item(content), toaster],
+        )?;
+        laid.set(Some((content_node, shell.layout_node())));
+        Ok(box_item(shell))
+    });
+    let (content, shell) = laid.get().expect("the shell was built");
+    telar::compute_layout(
+        shell,
+        telar::AvailableSpace::Definite(SURFACE.width),
+        telar::AvailableSpace::Definite(SURFACE.height),
+    )
+    .unwrap();
+    let height = |node| telar::track_layout(node).expect("registered").get().height;
+    assert_eq!(
+        height(content),
+        height(shell),
+        "the content reaches the bottom of the window"
+    );
+}

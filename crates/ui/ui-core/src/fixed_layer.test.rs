@@ -126,6 +126,44 @@ fn where_it_is_declared_it_takes_no_room_and_adds_no_gap() {
     assert_eq!(track_layout(after_node).unwrap().get().y, 110.0);
 }
 
+/// What a toaster is: a layer padded away from the surface's edges, its padding following state.
+#[test]
+fn a_layer_styled_by_state_still_takes_no_room_where_it_is_declared() {
+    reset_layout_runtime();
+    set_surface_size(SURFACE);
+    let filler = block(LayoutStyle::new().flex_grow(1.0));
+    let filler_node = filler.layout_node();
+    let padding = reactive_core::signal(16.0f32);
+    let layer = FixedLayer::new(
+        LayoutStyle::new().padding_all(padding.peek()),
+        vec![block(LayoutStyle::new().height(48.0))],
+    )
+    .unwrap()
+    .styled_by(move || LayoutStyle::new().padding_all(padding.get()));
+    let column = Container::new(
+        LayoutStyle::new()
+            .flex_column()
+            .width(SizeDimension::Percent(1.0))
+            .height(SizeDimension::Percent(1.0)),
+        vec![filler, Box::new(layer)],
+    )
+    .unwrap();
+    let column_node = column.layout_node();
+    compute_layout(
+        column_node,
+        AvailableSpace::Definite(SURFACE.width),
+        AvailableSpace::Definite(SURFACE.height),
+    )
+    .unwrap();
+    padding.set(24.0);
+    relayout_if_dirty();
+    assert_eq!(
+        track_layout(filler_node).unwrap().get().height,
+        track_layout(column_node).unwrap().get().height,
+        "the filler reaches the bottom of the column"
+    );
+}
+
 #[test]
 fn the_page_scrolling_under_it_never_moves_it() {
     let (page, bar) = page_with_layer(Rc::default());

@@ -37,7 +37,9 @@ It also declares the app's pages: the ones its route type lists in `Route::pages
 [docs/prerender.md](https://github.com/AdrielGBM/telar/blob/main/docs/prerender.md).
 
 `NavHost` renders the top of a stack as a page, built once and swapped with an optional `NavTransition`;
-`TabStacks` and `TabHost` keep one stack per tab.
+`TabStacks` and `TabHost` keep one stack per tab, and `TabHost::with_frame` shows a tab's pages inside UI of the
+app's own that lives as long as the tab. See
+[docs/navigation.md](https://github.com/AdrielGBM/telar/blob/main/docs/navigation.md).
 
 Keep it on the same version as `telar` — the same lockstep `telar` and `telar-macros` already have, and for
 the same reason.

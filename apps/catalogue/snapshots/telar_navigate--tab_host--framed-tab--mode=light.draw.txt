@@ -1,0 +1,36 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            matrix 1,0,0,1,16,16
+              text 0,0 128x16.8 "Recent" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,16,41
+              text 0,0 128x16.8 "Friday" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+            end
+          end
+        end
+        element group
+          element group
+            element group
+              matrix 1,0,0,1,176,16
+                text 0,0 608x23.52 "Draft" size=19.6 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,176,48
+                text 0,0 608x16.8 "Notes for Friday's meeting." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

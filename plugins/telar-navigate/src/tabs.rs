@@ -6,9 +6,10 @@ use std::rc::Rc;
 
 use telar::motion::Animated;
 use telar::{
-    Component, Event, EventResult, LayoutError, LayoutItem, LayoutStyle, NodeId, RenderNode,
-    RwSignal, SizeDimension, absolute_rect, mark_dirty, new_container, remove_node, set_children,
-    set_display, signal,
+    Children, Component, Event, EventResult, LayoutError, LayoutItem, LayoutStyle, Movable, NodeId,
+    OwnerId, RenderNode, RwSignal, SizeDimension, absolute_rect, box_item, dispose_owner,
+    mark_dirty, new_container, owner_scope, remove_node, set_children, set_display, signal,
+    with_owner,
 };
 
 use crate::host::NavHost;
@@ -19,11 +20,66 @@ use crate::transition::NavTransition;
 /// Builds a page for a route inside a given tab. The tab is passed alongside the route so an app whose route type is shared between tabs can still tell them apart; an app whose routes already name their tab can ignore it.
 type TabPageFactory<T, R> = dyn Fn(&T, &R) -> Result<Box<dyn NavPage>, LayoutError>;
 
-/// One tab's navigation stack, plus the [`NavHost`] rendering it — minted on the tab's first visit, then kept for the life of the host. That is the whole point of nested stacks: a tab you leave is still standing where you left it, several screens deep, without any per-route keep-alive policy holding it up.
+/// Builds what a tab shows around its pages, handed the pages to place: see [`TabHost::with_frame`].
+type TabFrame = dyn Fn(Children) -> Result<Box<dyn LayoutItem>, LayoutError>;
+
+/// One tab's navigation stack, plus the [`NavHost`] rendering it and what the tab shows around it — minted on the tab's first visit, then kept for the life of the host. That is the whole point of nested stacks: a tab you leave is still standing where you left it, several screens deep, without any per-route keep-alive policy holding it up.
 struct BuiltTab<T, R: Clone + Debug + Eq + 'static> {
     tab: T,
     host: Rc<RefCell<NavHost<R>>>,
+    /// The host built once and shown wherever the tab's root places it, so a frame that rearranges itself moves the pages rather than building them again.
+    pages: Movable,
+    /// What the tab built — its host, its pages and its root — so a tab that fails to build is freed alone.
+    owner: OwnerId,
+    root: Root,
+}
+
+/// What a tab shows: its frame, or its pages alone where it has none.
+struct Root {
+    item: Rc<RefCell<Box<dyn LayoutItem>>>,
     node: NodeId,
+    /// Beneath the tab's owner, so a frame set after the tab was built replaces this root without taking the pages with it.
+    owner: OwnerId,
+}
+
+/// A tab's pages as its root places them: the tab's one [`NavHost`], reached through the handle the [`TabHost`] reconciles it by.
+struct TabPages<R: Clone + Debug + Eq + 'static>(Rc<RefCell<NavHost<R>>>);
+
+impl<R: Clone + Debug + Eq + 'static> Component for TabPages<R> {
+    fn view(&self) -> RenderNode {
+        self.0.borrow().view()
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        self.0.borrow().dispatch(event)
+    }
+
+    fn debug_name(&self) -> &'static str {
+        "NavHost"
+    }
+}
+
+impl<R: Clone + Debug + Eq + 'static> LayoutItem for TabPages<R> {
+    fn layout_node(&self) -> NodeId {
+        self.0.borrow().layout_node()
+    }
+}
+
+/// The box a tab's root fills, and its pages fill wherever they are placed: the one a [`NavHost`] fills too.
+fn filling() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .flex_grow(1.0)
+        .width(SizeDimension::Percent(1.0))
+}
+
+fn place(pages: &Movable) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    Ok(box_item(pages.outlet(filling())?))
+}
+
+/// A fresh owner beneath `parent`, or beneath the one running now for `None`.
+fn mint_owner(parent: Option<OwnerId>) -> OwnerId {
+    with_owner(parent, || owner_scope().id())
 }
 
 /// One navigation stack per tab, and which tab is active — the state half of [`TabHost`], and the handle the app's tab bar or rail drives.
@@ -214,6 +270,8 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
 ///
 /// The [`PagePolicy`] and [`NavTransition`] set here apply to every tab's host, so `Transient` — the real page stack semantics — is the sane default choice here in a way it never was for a single shared stack: each tab's persistence comes from its stack staying alive, not from pinning pages by route.
 ///
+/// A tab can show its pages inside UI of the app's own that lives as long as the tab — a side panel beside its stack, kept as the reader navigates — with [`with_frame`](Self::with_frame).
+///
 /// A switch is reconciled whenever the host is asked for either half of itself, an event or a view, as [`NavHost`] reconciles a navigation: a tab selected from outside this host's subtree — a shell rail, or a screen reader activating a rail item, which sends no event at all — shows on the next frame without anyone calling [`sync`](Self::sync).
 pub struct TabHost<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> {
     stacks: TabStacks<T, R>,
@@ -221,8 +279,11 @@ pub struct TabHost<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'sta
     policy: Rc<dyn Fn(&R) -> PagePolicy>,
     transition: NavTransition,
     tab_transition: NavTransition,
+    frames: Vec<(T, Rc<TabFrame>)>,
     content_area: NodeId,
     shown: RefCell<Shown<T, R>>,
+    /// The owner every tab is built under, minted here for the reason [`NavHost`] mints its own: a tab is built during a reconcile, and whatever happens to be running then is no owner for something that lives as long as this host.
+    owner: Option<OwnerId>,
 }
 
 /// Everything a reconcile moves, behind one cell, so the view can settle before it renders. No borrow of it is held while a tab's host runs, since a page's hooks are the app's code and may select a tab.
@@ -242,13 +303,7 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
         stacks: TabStacks<T, R>,
         factory: impl Fn(&T, &R) -> Result<Box<dyn NavPage>, LayoutError> + 'static,
     ) -> Result<Self, LayoutError> {
-        let content_area = new_container(
-            LayoutStyle::new()
-                .flex_column()
-                .flex_grow(1.0)
-                .width(SizeDimension::Percent(1.0)),
-            &[],
-        )?;
+        let content_area = new_container(filling(), &[])?;
         let current = stacks.peek_active();
         let host = Self {
             stacks,
@@ -256,6 +311,7 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
             policy: Rc::new(|_| PagePolicy::default()),
             transition: NavTransition::None,
             tab_transition: NavTransition::None,
+            frames: Vec::new(),
             content_area,
             shown: RefCell::new(Shown {
                 tabs: Vec::new(),
@@ -263,6 +319,7 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
                 entrance: None,
                 failed_tab: None,
             }),
+            owner: Some(mint_owner(None)),
         };
         if let Err(error) = host.ensure_built(&current) {
             remove_node(host.content_area);
@@ -305,6 +362,27 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
         self
     }
 
+    /// Shows `tab`'s pages inside what `frame` builds around them: UI of the app's own that lives as long as the tab, such as an explorer beside its page stack, kept as the reader navigates inside the tab and while another tab is on screen.
+    ///
+    /// `frame` is handed the tab's pages as [`Children`], so any component that takes children places them, and runs once, on the tab's first visit, under an owner that lives as long as the tab. The pages are built once too, whatever the frame does with them: placed again, as a frame that rearranges itself across a breakpoint places them in its new arrangement, they move to the newest placement still standing, every page, scroll and field as it was. A tab with no frame shows its pages alone.
+    ///
+    /// A frame for a tab already built — the active one, which [`new`](Self::new) builds — is built at once, and a second frame for the same tab replaces the first. An error from `frame` is returned here for a tab already built, and is logged on a later first visit, as one from the page factory is; naming a tab the stacks do not declare is an error too.
+    pub fn with_frame(
+        mut self,
+        tab: T,
+        frame: impl Fn(Children) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    ) -> Result<Self, LayoutError> {
+        if self.stacks.navigator_for(&tab).is_none() {
+            return Err(LayoutError::Engine(format!(
+                "TabHost: a frame for {tab:?}, which names no declared tab"
+            )));
+        }
+        self.frames.retain(|(framed, _)| *framed != tab);
+        self.frames.push((tab.clone(), Rc::new(frame)));
+        self.reframe(&tab)?;
+        Ok(self)
+    }
+
     /// The per-tab stacks this host renders — clone it to drive the tab bar or a back control.
     pub fn stacks(&self) -> TabStacks<T, R> {
         self.stacks.clone()
@@ -322,12 +400,26 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
         self.host_of(&current)
     }
 
+    /// What the tab on screen shows, handed out on its own for the reason [`host_of`](Self::host_of) is.
+    fn current_root(&self) -> Option<Rc<RefCell<Box<dyn LayoutItem>>>> {
+        let shown = self.shown.borrow();
+        let built = shown.tabs.iter().find(|built| built.tab == shown.current)?;
+        Some(built.root.item.clone())
+    }
+
+    fn frame_of(&self, tab: &T) -> Option<Rc<TabFrame>> {
+        self.frames
+            .iter()
+            .find(|(framed, _)| framed == tab)
+            .map(|(_, frame)| frame.clone())
+    }
+
     /// Where a tab sits in declaration order — the tab bar's own left-to-right order, which is the only thing a directional switch animation can key off (tabs have no depth to compare).
     fn order_of(&self, tab: &T) -> usize {
         self.stacks.tabs().position(|t| t == tab).unwrap_or(0)
     }
 
-    /// Builds `tab`'s host if this is its first visit, appending its node to the container. Deferring this is what keeps an app with twenty tabs from constructing twenty screens at boot.
+    /// Builds `tab`'s host and what it shows if this is its first visit, appending that to the container. Deferring this is what keeps an app with twenty tabs from constructing twenty screens at boot.
     fn ensure_built(&self, tab: &T) -> Result<(), LayoutError> {
         if self.host_of(tab).is_some() {
             return Ok(());
@@ -337,30 +429,103 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> TabHost<T
                 "TabHost: the active tab names no declared stack".into(),
             ));
         };
+        let owner = mint_owner(self.owner);
+        let (host, pages, root) = match with_owner(Some(owner), || self.build_tab(tab, nav)) {
+            Ok(built) => built,
+            Err(error) => {
+                dispose_owner(owner);
+                return Err(error);
+            }
+        };
+        let nodes: Vec<NodeId> = {
+            let mut shown = self.shown.borrow_mut();
+            shown.tabs.push(BuiltTab {
+                tab: tab.clone(),
+                host,
+                pages,
+                owner,
+                root,
+            });
+            shown.tabs.iter().map(|built| built.root.node).collect()
+        };
+        set_children(self.content_area, &nodes)?;
+        Ok(())
+    }
+
+    fn build_tab(
+        &self,
+        tab: &T,
+        nav: Navigator<R>,
+    ) -> Result<(Rc<RefCell<NavHost<R>>>, Movable, Root), LayoutError> {
         let factory = self.factory.clone();
         let owner = tab.clone();
         let mut host = NavHost::new(nav, move |route: &R| factory(&owner, route))?;
         host.set_transition(self.transition);
         let policy = self.policy.clone();
         host.set_policy_for(move |route| policy(route));
-        let node = host.layout_node();
-        let nodes: Vec<NodeId> = {
-            let mut shown = self.shown.borrow_mut();
-            shown.tabs.push(BuiltTab {
-                tab: tab.clone(),
-                host: Rc::new(RefCell::new(host)),
-                node,
-            });
-            shown.tabs.iter().map(|built| built.node).collect()
+        let host = Rc::new(RefCell::new(host));
+        let pages = Movable::new({
+            let host = host.clone();
+            move || Ok(box_item(TabPages(host)))
+        })?;
+        let root = self.build_root(tab, &pages)?;
+        Ok((host, pages, root))
+    }
+
+    /// Builds what `tab` shows — its frame around `pages`, or `pages` alone — under an owner of its own beneath the one running now, the tab's.
+    fn build_root(&self, tab: &T, pages: &Movable) -> Result<Root, LayoutError> {
+        let frame = self.frame_of(tab);
+        let owner = mint_owner(None);
+        let item = with_owner(Some(owner), || match frame {
+            Some(frame) => frame(Children::one({
+                let pages = pages.clone();
+                move || place(&pages)
+            })),
+            None => place(pages),
+        });
+        match item {
+            Ok(item) => Ok(Root {
+                node: item.layout_node(),
+                item: Rc::new(RefCell::new(item)),
+                owner,
+            }),
+            Err(error) => {
+                dispose_owner(owner);
+                Err(error)
+            }
+        }
+    }
+
+    /// Rebuilds what `tab` shows from the frame set for it now, if the tab is built. The new root takes the pages before the old one is freed, so they move across rather than going with it.
+    fn reframe(&mut self, tab: &T) -> Result<(), LayoutError> {
+        let Some((owner, pages)) = self
+            .shown
+            .get_mut()
+            .tabs
+            .iter()
+            .find(|built| built.tab == *tab)
+            .map(|built| (built.owner, built.pages.clone()))
+        else {
+            return Ok(());
         };
+        let root = with_owner(Some(owner), || self.build_root(tab, &pages))?;
+        let shown = self.shown.get_mut();
+        let Some(built) = shown.tabs.iter_mut().find(|built| built.tab == *tab) else {
+            return Ok(());
+        };
+        let replaced = std::mem::replace(&mut built.root, root);
+        let nodes: Vec<NodeId> = shown.tabs.iter().map(|built| built.root.node).collect();
         set_children(self.content_area, &nodes)?;
+        self.refresh_display();
+        dispose_owner(replaced.owner);
+        remove_node(replaced.node);
         Ok(())
     }
 
     fn refresh_display(&self) {
         let shown = self.shown.borrow();
         for built in &shown.tabs {
-            set_display(built.node, built.tab == shown.current);
+            set_display(built.root.node, built.tab == shown.current);
         }
     }
 
@@ -445,10 +610,10 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> Component
         // Subscribing to the active tab makes this run again on every switch, however it was made, and settling first is what makes the tab it renders the one that is active.
         let _subscribe = self.stacks.active();
         self.sync();
-        let Some(host) = self.current_host() else {
+        let Some(root) = self.current_root() else {
             return RenderNode::Empty;
         };
-        let tab_view = host.borrow().view();
+        let tab_view = root.borrow().view();
         let shown = self.shown.borrow();
         if let Some((tab, forward, anim)) = &shown.entrance
             && *tab == shown.current
@@ -467,8 +632,8 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> Component
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let handled = match self.current_host() {
-            Some(host) => host.borrow().dispatch(event),
+        let handled = match self.current_root() {
+            Some(root) => root.borrow_mut().on_event(event),
             None => EventResult::Ignored,
         };
         self.sync();
@@ -481,6 +646,15 @@ impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> LayoutIte
 {
     fn layout_node(&self) -> NodeId {
         self.content_area
+    }
+}
+
+impl<T: Clone + Debug + Eq + 'static, R: Clone + Debug + Eq + 'static> Drop for TabHost<T, R> {
+    /// Releases the owner [`new`](Self::new) minted, and every tab built under it. A host built outside any scope is a root with no ancestor to be uprooted by, so nothing else would ever free it.
+    fn drop(&mut self) {
+        if let Some(owner) = self.owner {
+            dispose_owner(owner);
+        }
     }
 }
 

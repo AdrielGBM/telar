@@ -102,3 +102,27 @@ fn a_renamed_anchor_takes_the_address_and_the_arrival_with_it() {
         "the arrival keeps pulling the page toward the anchor under its new name"
     );
 }
+
+#[test]
+fn an_anchor_near_the_end_of_a_short_page_leaves_the_view_at_the_end() {
+    reset_layout_runtime();
+    receive_location_history(vec![at("/")]);
+    let column = Container::column(vec![
+        box_item(block(400.0)),
+        box_item(block(100.0).page_anchor(|| String::from("end"))),
+        box_item(block(50.0)),
+    ])
+    .unwrap();
+    let mut page = ScrollPage::new(Box::new(column)).unwrap();
+    page.relayout(400.0, 300.0);
+    assert!(follow(&anchor("end")));
+    let furthest = page
+        .viewport()
+        .max_offset_y()
+        .expect("the page is laid out");
+    assert_eq!(
+        offset(&page).1,
+        furthest,
+        "the page is not scrolled past its end"
+    );
+}

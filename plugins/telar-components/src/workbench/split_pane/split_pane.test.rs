@@ -578,27 +578,22 @@ fn divided_by_the_thin_bar_alone(direction: SplitDirection) {
 }
 
 #[test]
-fn the_grab_strip_reaches_half_a_gap_over_each_pane_and_no_further() {
+fn past_the_grab_strip_the_pane_takes_the_press() {
     for direction in [SplitDirection::Row, SplitDirection::Column] {
-        reaches_half_a_gap_over_each_pane(direction);
+        past_the_strip_the_pane_takes_the_press(direction);
     }
 }
 
-fn reaches_half_a_gap_over_each_pane(direction: SplitDirection) {
+fn past_the_strip_the_pane_takes_the_press(direction: SplitDirection) {
     let panes = heard();
     let split = Split::holding(sized(direction, signal(200.0)), listening(&panes));
-    let past: Vec<_> = [-1.0, 1.0]
+    let past = f64::from(bar_thickness() / 2.0 + grab_reach() + 1.0);
+    let points: Vec<_> = [-1.0, 1.0]
         .into_iter()
-        .map(|side| split.across(side * f64::from(bar_thickness() + 1.0)))
+        .map(|side| split.across(side * past))
         .collect();
     let mut tree = telar::ComponentList::new(split.item);
-    let target = telar::inspect::snapshot(&tree.commands())
-        .into_iter()
-        .find(|node| node.role == Role::Splitter)
-        .expect("the splitter is announced")
-        .rect;
-    assert_eq!(direction.main(target), 2.0 * bar_thickness());
-    for (pane, (x, y)) in panes.iter().zip(past) {
+    for (pane, (x, y)) in panes.iter().zip(points) {
         telar::testing::route(&mut tree, &press(x, y));
         telar::testing::route(&mut tree, &release(x, y));
         assert_eq!(
@@ -606,6 +601,38 @@ fn reaches_half_a_gap_over_each_pane(direction: SplitDirection) {
             1,
             "past the strip, what the pane keeps at its edge takes the press"
         );
+    }
+}
+
+/// Each pane filled by a button that reaches the gap, so the splitter has a target against each of its sides.
+fn buttons() -> [Children; 2] {
+    ["Files", "Editor"].map(|name| {
+        Children::one(move || {
+            let button = StyledContainer::new(
+                LayoutStyle::new().flex_grow(1.0),
+                |_| RectStyle::default(),
+                vec![],
+            )?
+            .control(Role::Button)
+            .on_press(|| {})
+            .a11y_label(move || name);
+            Ok(box_item(button))
+        })
+    })
+}
+
+#[test]
+fn the_splitter_is_a_full_size_target_between_targets_flush_against_the_gap() {
+    for direction in [SplitDirection::Row, SplitDirection::Column] {
+        let split = Split::holding(sized(direction, signal(200.0)), buttons());
+        let tree = telar::ComponentList::new(split.item);
+        let audit = telar::inspect::audit(&tree.commands(), None);
+        let small: Vec<_> = audit
+            .violations
+            .iter()
+            .filter(|violation| violation.rule == telar::inspect::a11y::Rule::TargetSize)
+            .collect();
+        assert!(small.is_empty(), "{direction:?}: {small:?}");
     }
 }
 

@@ -466,3 +466,128 @@ fn a_tab_a_reader_activates_from_outside_the_host_shows_its_page_without_another
     assert!(read.contains(&"Search page".to_string()), "{read:?}");
     assert!(!read.contains(&"Home page".to_string()), "{read:?}");
 }
+
+/// A frame that records each build and keeps the pages it was handed, so a test can place them again.
+struct FrameLog {
+    builds: Rc<RefCell<Vec<u8>>>,
+    pages: Rc<RefCell<Option<telar::Children>>>,
+}
+
+fn framing(
+    tab: u8,
+    log: &FrameLog,
+) -> impl Fn(telar::Children) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static {
+    let (builds, kept) = (log.builds.clone(), log.pages.clone());
+    move |pages: telar::Children| {
+        builds.borrow_mut().push(tab);
+        *kept.borrow_mut() = Some(pages.clone());
+        let panel = telar::Text::declaring(|| "Explorer".to_string(), LayoutStyle::new(), |t| t)?;
+        let mut items: Vec<Box<dyn LayoutItem>> = vec![telar::box_item(panel)];
+        items.extend(pages.build()?);
+        Ok(telar::box_item(telar::Container::new(
+            LayoutStyle::new().flex_row().flex_grow(1.0),
+            items,
+        )?))
+    }
+}
+
+fn frame_log() -> FrameLog {
+    FrameLog {
+        builds: Rc::new(RefCell::new(Vec::new())),
+        pages: Rc::new(RefCell::new(None)),
+    }
+}
+
+#[test]
+fn a_frame_is_built_once_and_outlives_navigation_inside_its_tab() {
+    let (host, stacks, h) = build();
+    let log = frame_log();
+    let mut host = host.with_frame(1, framing(1, &log)).unwrap();
+    assert!(log.builds.borrow().is_empty(), "tab 1 is not visited yet");
+
+    stacks.select(1);
+    tick(&mut host);
+    stacks.push(10);
+    tick(&mut host);
+    stacks.push(11);
+    tick(&mut host);
+    stacks.select(0);
+    tick(&mut host);
+    stacks.select(1);
+    tick(&mut host);
+    assert_eq!(host.current_route(), Some(11));
+    assert_eq!(
+        *log.builds.borrow(),
+        vec![1],
+        "one frame, for the life of the tab"
+    );
+    assert!(h.dropped.borrow().is_empty(), "{:?}", h.dropped.borrow());
+}
+
+#[test]
+fn a_frame_for_the_tab_already_on_screen_wraps_its_pages_at_once() {
+    let (host, _stacks, h) = build();
+    let log = frame_log();
+    let host = host.with_frame(0, framing(0, &log)).unwrap();
+    assert_eq!(*log.builds.borrow(), vec![0]);
+    assert_eq!(
+        *h.built.borrow(),
+        vec![(0, 0)],
+        "the pages were moved into the frame, not built again"
+    );
+    compute_layout(
+        host.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .ok();
+    let page = absolute_rect(node_of(&h, (0, 0)))
+        .map(|r| r.width)
+        .unwrap_or(0.0);
+    assert!(page > 0.0, "the page is laid out inside the frame");
+}
+
+#[test]
+fn pages_a_frame_places_again_move_there_without_being_rebuilt() {
+    let (host, stacks, h) = build();
+    let log = frame_log();
+    let mut host = host.with_frame(0, framing(0, &log)).unwrap();
+    stacks.push(10);
+    tick(&mut host);
+    let pages = log
+        .pages
+        .borrow()
+        .clone()
+        .expect("the frame was handed its pages");
+    let elsewhere = telar::Container::new(
+        LayoutStyle::new().flex_column().width(300.0).height(120.0),
+        pages.build().unwrap(),
+    )
+    .unwrap();
+    compute_layout(
+        elsewhere.layout_node(),
+        AvailableSpace::Definite(300.0),
+        AvailableSpace::Definite(120.0),
+    )
+    .ok();
+    let page = absolute_rect(node_of(&h, (0, 10))).map(|r| r.width);
+    assert_eq!(
+        page,
+        absolute_rect(elsewhere.layout_node()).map(|r| r.width),
+        "the page fills the placement that holds it now"
+    );
+    assert_eq!(
+        *h.built.borrow(),
+        vec![(0, 0), (0, 10)],
+        "nothing was rebuilt"
+    );
+    assert!(h.dropped.borrow().is_empty());
+    drop(elsewhere);
+}
+
+#[test]
+fn a_frame_for_a_tab_the_stacks_do_not_declare_is_refused() {
+    let (host, _stacks, _h) = build();
+    let log = frame_log();
+    assert!(host.with_frame(7, framing(7, &log)).is_err());
+}
