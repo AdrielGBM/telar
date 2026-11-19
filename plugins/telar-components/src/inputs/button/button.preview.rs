@@ -65,7 +65,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .matrix(Matrix::Named("themes"))
         .play(|canvas| {
             canvas.press(Key::Named(NamedKey::Enter))?;
-            canvas.expect_action("on_press", 0)
+            canvas.expect_action("on_press", 0)?;
+            canvas.expect_accessible()
         }),
         preview!(button: ButtonProps, "Counting presses", |p| {
             let presses = p.signal("presses", 0u32);

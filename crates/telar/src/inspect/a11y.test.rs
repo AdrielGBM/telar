@@ -771,3 +771,36 @@ fn findings_of_the_frame_and_of_focus_read_in_the_order_of_the_rules() {
         "{report}"
     );
 }
+
+fn saves(_: &PreviewCtx) -> Built {
+    column(vec![button(Some("Save"), 80.0, 40.0)])
+}
+
+fn presses_then_checks(canvas: &mut Play) -> crate::preview::PlayResult {
+    canvas.press(crate::Key::Named(crate::NamedKey::Enter))?;
+    canvas.expect_accessible()
+}
+
+#[test]
+fn a_play_that_checks_itself_after_a_step_audits_once_and_ends() {
+    let play_entry = entry(saves)
+        .locale(const { &crate::locale_tag!("en") })
+        .play(presses_then_checks);
+    let mut play = Play::mount(&play_entry).unwrap();
+    assert_eq!(play.run(), Ok(()));
+    assert_eq!(
+        play.steps().len(),
+        2,
+        "the press and the check, each once: the audit's replay is a copy"
+    );
+}
+
+#[test]
+fn a_play_that_checks_itself_still_fails_on_what_the_audit_finds() {
+    let play_entry = entry(troubled)
+        .locale(const { &crate::locale_tag!("en") })
+        .play(presses_then_checks);
+    let mut play = Play::mount(&play_entry).unwrap();
+    let error = play.run().expect_err("the canvas has unnamed controls");
+    assert!(error.message.contains("not accessible"), "{error}");
+}

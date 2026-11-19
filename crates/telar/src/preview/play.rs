@@ -36,6 +36,7 @@ pub struct Play {
     failures: CaughtFailures,
     steps: Vec<PlayStep>,
     owner: Option<OwnerId>,
+    replaying: Option<usize>,
 }
 
 /// What the error boundary of a canvas a [`Play`] drives caught, so the play fails the step that broke the build. A host that mounts the preview its own way records each failure its boundary reports here, and hands the same handle to [`Play::attach`].
@@ -142,6 +143,7 @@ impl Play {
             failures,
             steps: Vec::new(),
             owner: None,
+            replaying: None,
         }
     }
 
@@ -171,6 +173,7 @@ impl Play {
             failures,
             steps: Vec::new(),
             owner: Some(owner),
+            replaying: None,
         };
         play.canvas = Some(canvas?);
         play.settle_now();
@@ -266,12 +269,15 @@ impl Play {
 
     /// The [`a11y::check`] findings for the canvas now, and the [`a11y::check_focus`] findings as the keyboard reaches each of its stops, without the rules the entry ignores.
     ///
-    /// The stops are walked on a copy of the preview mounted with the same args, environment and size, and its play run again if this one has taken steps, so a handler that runs as focus arrives (a cursor seeded on focus) leaves this canvas as it was.
+    /// The stops are walked on a copy of the preview mounted with the same args, environment and size, and its play run again if this one has taken steps, so a handler that runs as focus arrives (a cursor seeded on focus) leaves this canvas as it was. The replay stops where this canvas stands: a check the play makes inside it audits nothing, and the one that asked for the copy ends it, so a play that checks itself does not recurse.
     ///
     /// # Panics
     ///
     /// When the copy cannot be mounted, which a preview that built once builds again.
     pub fn check_a11y(&self) -> a11y::Report {
+        if self.replaying.is_some() {
+            return a11y::Report::default();
+        }
         let frame = self.frame();
         let snapshot = frame
             .access
@@ -291,6 +297,7 @@ impl Play {
         })
         .unwrap_or_else(|error| panic!("the preview did not mount again to be checked: {error}"));
         if !self.steps.is_empty() {
+            copy.replaying = Some(self.steps.len());
             let _ = copy.run();
         }
         copy
@@ -571,6 +578,13 @@ impl Play {
 
     /// That [`check_a11y`](Self::check_a11y) finds no [`Severity::Error`].
     pub fn expect_accessible(&mut self) -> PlayResult {
+        if let Some(reproduced) = self.replaying {
+            return if self.steps.len() >= reproduced {
+                Err(PlayError::new("the replay reached the check it was made for"))
+            } else {
+                self.step(String::from("expect accessible"), Ok(()))
+            };
+        }
         let report = self.check_a11y();
         let errors: Vec<String> = report
             .at_least(Severity::Error)
