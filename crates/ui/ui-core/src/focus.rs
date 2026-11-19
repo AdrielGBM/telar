@@ -5,6 +5,7 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
+use geometry_core::Rect;
 use layout_core::NodeId;
 use platform_core::{
     ActionSupport, Chord, ConsumedKeys, Event, FocusBoundary, Key, ModifiersState, NamedKey,
@@ -12,7 +13,10 @@ use platform_core::{
 };
 use reactive_core::{RwSignal, effect, signal};
 use renderer_core::Focusable;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::cell::RefCell;
+
+use crate::roster::Roster;
 use ui_tree::EventResult;
 
 use crate::Handler;
@@ -63,14 +67,13 @@ pub fn handle(id: FocusId) -> FocusHandle {
 }
 
 /// Identifies one registered `Scope`, so a closing overlay can withdraw exactly its own.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ScopeId(u64);
 
 /// A region of the tree whose focusables are only reachable while it is showing.
 ///
 /// Declared by whatever can hide content without taking it out of the tree — an [`Overlay`](crate::Overlay) kept mounted across a close, today. It names a *node*, not a set of ids, and that is the whole trick: an overlay's children are built before the overlay that will host them, so it never learns which focusables are its own. Ancestry answers instead.
 struct Scope {
-    id: ScopeId,
     node: NodeId,
     showing: Rc<dyn Fn() -> bool>,
     /// Whether the scope holds focus in while it shows — a modal, as against a tooltip layer.
@@ -185,9 +188,15 @@ struct FocusState {
     // A signal, not a plain flag: Tab onto the widget just clicked moves this without moving `focused`, and a ring that missed it would be stale exactly when the keyboard took over.
     pointer_focus: RwSignal<bool>,
     // In registration order; Tab walks it in document order (see `in_document_order`).
-    order: Vec<Entry>,
+    order: Roster<FocusId, Entry>,
     // Regions that can hide their contents without unregistering them; consulted when stepping.
-    scopes: Vec<Scope>,
+    scopes: Roster<ScopeId, Scope>,
+    // The scopes on each box, which is how a box is asked about the scopes on its own ancestry alone.
+    scopes_at: FxHashMap<NodeId, Vec<ScopeId>>,
+    // The scopes that hold focus inside themselves while they show, in the order they registered.
+    traps: Vec<ScopeId>,
+    // Whether each control asked about holds focus, as a signal of its own with the owner it lives in. See [`is_focused`].
+    holding: FxHashMap<FocusId, (reactive_core::OwnerId, RwSignal<bool>)>,
     // A set rather than a field on each entry, because it is the minority and the only kind anyone asks about.
     text_entries: FxHashSet<FocusId>,
     // Bumped when a gate or an ownership link is registered, so the guard re-reads an ancestry it could not have subscribed to yet.
@@ -223,8 +232,11 @@ impl FocusState {
             next_scope: 1,
             focused: signal(None),
             pointer_focus: signal(false),
-            order: Vec::new(),
-            scopes: Vec::new(),
+            order: Roster::default(),
+            scopes: Roster::default(),
+            scopes_at: FxHashMap::default(),
+            traps: Vec::new(),
+            holding: FxHashMap::default(),
             text_entries: FxHashSet::default(),
             reach: signal(0),
             roster: signal(0),
@@ -240,11 +252,23 @@ impl FocusState {
     }
 
     fn entry(&self, id: FocusId) -> Option<&Entry> {
-        self.order.iter().find(|e| e.id == id)
+        self.order.get(id)
     }
 
     fn entry_mut(&mut self, id: FocusId) -> Option<&mut Entry> {
-        self.order.iter_mut().find(|e| e.id == id)
+        self.order.get_mut(id)
+    }
+
+    fn withdraw_scope(&mut self, id: ScopeId) -> Option<Scope> {
+        let scope = self.scopes.remove(id)?;
+        if let Some(on_node) = self.scopes_at.get_mut(&scope.node) {
+            on_node.retain(|at| *at != id);
+            if on_node.is_empty() {
+                self.scopes_at.remove(&scope.node);
+            }
+        }
+        self.traps.retain(|at| *at != id);
+        Some(scope)
     }
 }
 
@@ -274,9 +298,54 @@ pub fn current() -> Option<FocusId> {
     focused_signal().get()
 }
 
-/// Whether `id` currently holds focus.
+/// Whether `id` currently holds focus. Reactive, like [`current`], but the caller runs again only when `id` gains or loses focus, not whenever focus moves between two other controls: what keeps a move of focus on a page of thousands of controls to the two it moved between.
 pub fn is_focused(id: FocusId) -> bool {
-    current() == Some(id)
+    match holding(id) {
+        Some(held) => held.get(),
+        None => current() == Some(id),
+    }
+}
+
+/// Moves focus to `new`, telling the controls it leaves and reaches and whoever follows focus as a whole.
+fn set_focused(new: Option<FocusId>) {
+    let focused = focused_signal();
+    let old = focused.peek();
+    if old == new {
+        return;
+    }
+    let (left, reached) = with_focus_ref(|s| {
+        let of = |id: Option<FocusId>| id.and_then(|id| s.holding.get(&id).map(|(_, held)| *held));
+        (of(old), of(new))
+    });
+    reactive_core::batch(|| {
+        focused.set(new);
+        if let Some(left) = left {
+            left.set(false);
+        }
+        if let Some(reached) = reached {
+            reached.set(true);
+        }
+    });
+}
+
+/// The signal saying whether `id` holds focus, made the first time anyone asks and kept until `id` leaves the order; `None` for an id not in the order.
+fn holding(id: FocusId) -> Option<RwSignal<bool>> {
+    let (registered, held) =
+        with_focus_ref(|s| (s.order.contains(id), s.holding.get(&id).copied()));
+    if let Some((_, held)) = held {
+        return Some(held);
+    }
+    if !registered {
+        return None;
+    }
+    let holds = focused_signal().peek() == Some(id);
+    // Owned apart from whoever asks first, which may be a view re-run and disposed long before `id` leaves.
+    let scope = reactive_core::root_scope();
+    let held = signal(holds);
+    let owner = scope.id();
+    drop(scope);
+    with_focus(|s| s.holding.insert(id, (owner, held)));
+    Some(held)
 }
 
 /// Whether the key being dispatched is `id`'s to handle: `id` held focus when the key arrived. Outside a key's dispatch, whether `id` holds focus now.
@@ -347,7 +416,7 @@ fn take_arriving(id: FocusId, from_pointer: bool, travel: Option<Travel>) {
     if !holds_focus(id) {
         let found = with_focus_ref(|s| s.entry(id).map(|e| (e.node, e.reach.clone())));
         if let Some((node, Some(reach))) = found
-            && reachable(node, &scope_views())
+            && reachable(node)
         {
             reach.run();
         }
@@ -399,10 +468,40 @@ fn give(id: FocusId, from_pointer: bool) {
     supersede_deferred();
     guard_focus();
     set_pointer_focus(from_pointer);
-    let focused = focused_signal();
-    if focused.peek() != Some(id) {
-        focused.set(Some(id));
+    if focused_signal().peek() != Some(id) {
+        set_focused(Some(id));
+        if !from_pointer {
+            reveal_focused(id);
+        }
     }
+}
+
+/// Brings the box `id` stands on into view in every scroll it sits in, as focus arriving from the keyboard or from the application does: a control the pointer pressed is already under it. A box not laid out yet has nowhere to be brought to, and is left where it is.
+///
+/// A box larger than a view that already shows part of it is left where it is in that view: what of it the keyboard is on, such as an editor's caret, is the box's own to bring into view.
+fn reveal_focused(id: FocusId) {
+    let Some(node) = node_of(id) else {
+        return;
+    };
+    reactive_core::untrack(|| {
+        let mut item = node;
+        for viewport in crate::scroll_viewports_of(node) {
+            let Some(placed) = layout_reactive::track_layout(item).map(|rect| rect.peek()) else {
+                return;
+            };
+            if placed.width <= 0.0 && placed.height <= 0.0 {
+                return;
+            }
+            let (x, y) = viewport.peek_offset();
+            let view = viewport.rect().peek();
+            let window = Rect::new(x, y, view.width, view.height);
+            let fits = placed.width <= view.width && placed.height <= view.height;
+            if fits || placed.intersect(window).is_none() {
+                viewport.reveal(item, 0.0);
+            }
+            item = viewport.area();
+        }
+    });
 }
 
 /// The layout node the control `id` stands on, while it is registered.
@@ -440,9 +539,8 @@ pub fn release(id: FocusId) {
 }
 
 fn drop_focus(id: FocusId) {
-    let focused = focused_signal();
-    if focused.peek() == Some(id) {
-        focused.set(None);
+    if focused_signal().peek() == Some(id) {
+        set_focused(None);
     }
 }
 
@@ -511,9 +609,8 @@ pub fn blur_from_pointer(x: f32, y: f32) {
 /// Clears focus entirely, whoever holds it, and withdraws any request still waiting on its batch.
 pub fn clear() {
     supersede_deferred();
-    let focused = focused_signal();
-    if focused.peek().is_some() {
-        focused.set(None);
+    if focused_signal().peek().is_some() {
+        set_focused(None);
     }
 }
 
@@ -600,7 +697,7 @@ pub fn perform(id: FocusId, action: AccessAction) -> bool {
     let Some((node, actions)) = found else {
         return false;
     };
-    if !reachable(node, &scope_views()) {
+    if !reachable(node) {
         return false;
     }
     match action {
@@ -693,26 +790,29 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                 false
             }
             None => {
-                s.order.push(Entry {
+                s.order.push(
                     id,
-                    node,
-                    role,
-                    stop,
-                    reach: None,
-                    actions: Actions::default(),
-                    scrolls: None,
-                    toggled: None,
-                    value: None,
-                    help: Help::default(),
-                    orientation: None,
-                    outline: Outline::default(),
-                    active_descendant: None,
-                    controls: None,
-                    keyboard: None,
-                    text_input: None,
-                    text_selection: None,
-                    line_starts: None,
-                });
+                    Entry {
+                        id,
+                        node,
+                        role,
+                        stop,
+                        reach: None,
+                        actions: Actions::default(),
+                        scrolls: None,
+                        toggled: None,
+                        value: None,
+                        help: Help::default(),
+                        orientation: None,
+                        outline: Outline::default(),
+                        active_descendant: None,
+                        controls: None,
+                        keyboard: None,
+                        text_input: None,
+                        text_selection: None,
+                        line_starts: None,
+                    },
+                );
                 true
             }
         };
@@ -757,14 +857,20 @@ pub fn register_scope_because(
     let id = with_focus(|s| {
         let id = ScopeId(s.next_scope);
         s.next_scope += 1;
-        s.scopes.push(Scope {
+        s.scopes.push(
             id,
-            node,
-            showing: Rc::new(showing),
-            traps,
-            reason,
-            owner: None,
-        });
+            Scope {
+                node,
+                showing: Rc::new(showing),
+                traps,
+                reason,
+                owner: None,
+            },
+        );
+        s.scopes_at.entry(node).or_default().push(id);
+        if traps {
+            s.traps.push(id);
+        }
         id
     });
     layers_changed();
@@ -776,7 +882,7 @@ pub fn register_scope_because(
 /// A dropdown's panel traps focus like any modal, and its trigger is outside it; without this the trigger would drop out of the accessibility snapshot for as long as the panel is open, taking its expanded state with it. Only what is read changes: Tab still stays inside the scope.
 pub fn set_scope_owner(scope: ScopeId, owner: NodeId) {
     with_focus(|s| {
-        if let Some(scope) = s.scopes.iter_mut().find(|sc| sc.id == scope) {
+        if let Some(scope) = s.scopes.get_mut(scope) {
             scope.owner = Some(owner);
         }
     });
@@ -784,38 +890,48 @@ pub fn set_scope_owner(scope: ScopeId, owner: NodeId) {
 
 /// Withdraws a scope registered with [`register_scope`].
 pub fn unregister_scope(id: ScopeId) {
-    with_focus(|s| s.scopes.retain(|scope| scope.id != id));
+    let withdrawn = with_focus(|s| s.withdraw_scope(id));
+    drop(withdrawn);
     layers_changed();
 }
 
 /// Removes `id` from the tab order and drops its focus if it held it. A focusable widget calls this on drop, so a destroyed widget never lingers in traversal or as the focused id.
 pub fn unregister(id: FocusId) {
     let left = with_focus(|s| {
-        let before = s.order.len();
-        s.order.retain(|e| e.id != id);
+        let left = s.order.remove(id);
         s.text_entries.remove(&id);
-        s.order.len() != before
+        left
     });
     release(id);
-    if left {
+    forget_holding(id);
+    if left.is_some() {
         roster_changed();
+    }
+    // Dropped outside the slot: a closure it holds may own a widget whose teardown reaches back into it.
+    drop(left);
+}
+
+/// Frees the signal saying whether `id` holds focus, once `id` has left the order.
+fn forget_holding(id: FocusId) {
+    if let Some((owner, _)) = with_focus(|s| s.holding.remove(&id)) {
+        reactive_core::dispose_owner(owner);
     }
 }
 
 /// Forgets every focusable and scope that names a layout node, for a layout runtime being replaced: the next tree is handed the same node ids, and an entry left behind would be announced, and stepped onto, as part of it.
 pub(crate) fn forget_nodes() {
     let (entries, scopes) = with_focus(|s| {
-        let (entries, kept): (Vec<Entry>, Vec<Entry>) = std::mem::take(&mut s.order)
-            .into_iter()
-            .partition(|e| e.node.is_some());
-        s.order = kept;
+        let entries = s.order.remove_where(|e| e.node.is_some());
         for entry in &entries {
             s.text_entries.remove(&entry.id);
         }
-        (entries, std::mem::take(&mut s.scopes))
+        s.scopes_at.clear();
+        s.traps.clear();
+        (entries, s.scopes.take_all())
     });
     for entry in &entries {
         release(entry.id);
+        forget_holding(entry.id);
     }
     if !entries.is_empty() {
         roster_changed();
@@ -939,36 +1055,140 @@ pub fn focus_prev() {
     step(-1);
 }
 
-/// A [`Scope`] as [`step`] reads it, once copied out from under the slot borrow: where it is, whether it is showing, and whether it holds focus inside itself.
-type ScopeView = (NodeId, Rc<dyn Fn() -> bool>, bool);
+/// A [`Scope`] as reachability reads it, once copied out from under the slot borrow: where it is, whether it is showing, whether it holds focus inside itself, and the control it was opened from.
+#[derive(Clone)]
+struct Gate {
+    node: NodeId,
+    showing: Rc<dyn Fn() -> bool>,
+    traps: bool,
+    owner: Option<NodeId>,
+}
 
-/// Whether Tab should be able to land on a focusable at `node`, given the scopes registered right now.
+impl Gate {
+    fn of(scope: &Scope) -> Self {
+        Self {
+            node: scope.node,
+            showing: Rc::clone(&scope.showing),
+            traps: scope.traps,
+            owner: scope.owner,
+        }
+    }
+}
+
+/// Whether Tab should be able to land on a focusable, given the scopes registered when it was read.
 ///
 /// Three ways to be out of reach, and they are genuinely different mechanisms rather than one seen from three angles — which is why a rule aimed at any single one of them leaves the others open:
 /// - taking no input, by being out of layout flow, fully transparent or inert, itself or through an ancestor;
 /// - inside a region kept mounted while not showing, which leaves the rect *and* the layout intact;
 /// - outside the modal that is currently up, which is about nothing on the node itself.
-fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
-    // A focus id standing for no widget has no way to be off screen.
-    let Some(node) = node else { return true };
-    if !crate::input_region::receives_input(node) {
-        return false;
+///
+/// The scopes are filed by the box they sit on, and a box is asked about the ones on its own ancestry only, each read once however many focusables sit inside it: a page of thousands of controls, each disabled by a scope of its own, is answered in the depth of the tree rather than in the number of scopes.
+struct Reach {
+    closing: FxHashMap<NodeId, Vec<Rc<dyn Fn() -> bool>>>,
+    closed: RefCell<FxHashMap<NodeId, bool>>,
+    /// The trapping scopes that are up, in the order they registered, each with the control it was opened from.
+    traps: Vec<(NodeId, Option<NodeId>)>,
+    /// Whether a trap leaves in reach what sits inside the control it was opened from, as a reader is still told about a dropdown's trigger.
+    owners_reach: bool,
+}
+
+impl Reach {
+    /// Reach as Tab walks it, by every scope registered.
+    fn all() -> Self {
+        Self::of(
+            with_focus_ref(|s| s.scopes.iter().map(Gate::of).collect()),
+            false,
+        )
     }
-    if scopes
-        .iter()
-        .any(|(scope, showing, _)| !showing() && crate::input_region::is_inside(node, *scope))
-    {
-        return false;
+
+    /// The scopes that keep a region out of view, leaving out those that disable one: what a reader is not told about, where a disabled control is still there to be told about.
+    fn out_of_view() -> Vec<Gate> {
+        with_focus_ref(|s| {
+            s.scopes
+                .iter()
+                .filter(|scope| scope.reason == ScopeReason::NotShowing)
+                .map(Gate::of)
+                .collect()
+        })
     }
-    // The topmost trapping scope that is up holds focus inside itself.
-    match scopes
-        .iter()
-        .rev()
-        .find(|(_, showing, traps)| *traps && showing())
-    {
-        Some((scope, _, _)) => crate::input_region::is_inside(node, *scope),
-        None => true,
+
+    /// [`all`](Self::all), read for `node` alone: the scopes on its ancestry and the traps.
+    fn around(node: Option<NodeId>) -> Self {
+        let line: Vec<NodeId> = node
+            .map(|node| crate::input_region::lineage(node).collect())
+            .unwrap_or_default();
+        let gates = with_focus_ref(|s| {
+            let on_line = line
+                .iter()
+                .filter_map(|at| s.scopes_at.get(at))
+                .flatten()
+                .filter_map(|id| s.scopes.get(*id));
+            let traps = s.traps.iter().filter_map(|id| s.scopes.get(*id));
+            on_line.chain(traps).map(Gate::of).collect()
+        });
+        Self::of(gates, false)
     }
+
+    fn of(gates: Vec<Gate>, owners_reach: bool) -> Self {
+        let traps = gates
+            .iter()
+            .filter(|gate| gate.traps && (gate.showing)())
+            .map(|gate| (gate.node, gate.owner))
+            .collect();
+        let mut closing: FxHashMap<NodeId, Vec<Rc<dyn Fn() -> bool>>> = FxHashMap::default();
+        for gate in gates {
+            closing.entry(gate.node).or_default().push(gate.showing);
+        }
+        Self {
+            closing,
+            closed: RefCell::default(),
+            traps,
+            owners_reach,
+        }
+    }
+
+    /// Whether a modal is up and holding focus inside itself.
+    fn is_trapped(&self) -> bool {
+        !self.traps.is_empty()
+    }
+
+    fn admits(&self, node: Option<NodeId>) -> bool {
+        // A focus id standing for no widget has no way to be off screen.
+        let Some(node) = node else { return true };
+        if !crate::input_region::receives_input(node) {
+            return false;
+        }
+        if crate::input_region::lineage(node).any(|at| self.closes(at)) {
+            return false;
+        }
+        // The topmost trapping scope that is up holds focus inside itself.
+        let holding = self.traps.iter().rev().find(|(_, owner)| {
+            !(self.owners_reach
+                && owner.is_some_and(|owner| crate::input_region::is_inside(node, owner)))
+        });
+        match holding {
+            Some((scope, _)) => crate::input_region::is_inside(node, *scope),
+            None => true,
+        }
+    }
+
+    /// Whether a scope on `at` is closed now.
+    fn closes(&self, at: NodeId) -> bool {
+        if let Some(&closed) = self.closed.borrow().get(&at) {
+            return closed;
+        }
+        let closed = self
+            .closing
+            .get(&at)
+            .is_some_and(|gates| gates.iter().any(|showing| !showing()));
+        self.closed.borrow_mut().insert(at, closed);
+        closed
+    }
+}
+
+/// Whether Tab can land on `node` now. See [`Reach`].
+fn reachable(node: Option<NodeId>) -> bool {
+    Reach::around(node).admits(node)
 }
 
 /// One place Tab stops: the focusable, the box it is, and what it is.
@@ -984,9 +1204,8 @@ pub struct TabStop {
 ///
 /// The document's order, not the order the frame draws in: a layer fixed over the page or an overlay is drawn after everything under it and read where it was declared. Only what Tab can reach is in it — nothing inside a closed region or a disabled one, and only the open modal's own stops while one holds focus.
 pub fn tab_order() -> Vec<TabStop> {
-    let (order, scopes) = with_focus_ref(|s| {
-        let order: Vec<(TabStop, Stop)> = s
-            .order
+    let order: Vec<(TabStop, Stop)> = with_focus_ref(|s| {
+        s.order
             .iter()
             .filter(|e| e.stop.holds_focus())
             .map(|e| {
@@ -997,16 +1216,11 @@ pub fn tab_order() -> Vec<TabStop> {
                 };
                 (stop, e.stop.clone())
             })
-            .collect();
-        let scopes: Vec<ScopeView> = s
-            .scopes
-            .iter()
-            .map(|sc| (sc.node, sc.showing.clone(), sc.traps))
-            .collect();
-        (order, scopes)
+            .collect()
     });
     // Filtered once the borrow drops: `showing` and a roving group's choice are the author's closures, and the reachability queries borrow the layout runtime.
-    let idle = idle_scrollers(&scopes);
+    let reach = Reach::all();
+    let idle = idle_scrollers(&reach);
     let order = order
         .into_iter()
         .filter(|(stop, kind)| !idle.contains(&stop.id) && kind.is_stop())
@@ -1014,7 +1228,7 @@ pub fn tab_order() -> Vec<TabStop> {
         .collect();
     in_document_order(order)
         .into_iter()
-        .filter(|stop| reachable(stop.node, &scopes))
+        .filter(|stop| reach.admits(stop.node))
         .collect()
 }
 
@@ -1066,23 +1280,23 @@ fn scrollers_and_holders(pick: impl Fn(FocusId) -> bool) -> (Vec<Scroller>, Vec<
 fn idles(
     (id, node, scrolls): &Scroller,
     holders: &[NodeId],
-    scopes: &[ScopeView],
+    reach: &Reach,
     focused: Option<FocusId>,
 ) -> bool {
     focused != Some(*id)
         && (!scrolls()
             || holders.iter().any(|&held| {
-                crate::input_region::is_inside(held, *node) && reachable(Some(held), scopes)
+                crate::input_region::is_inside(held, *node) && reach.admits(Some(held))
             }))
 }
 
 /// The scroll areas that are no stop right now: their content fits, or a stop inside them is reachable, and focus is not on them. See [`register_scroller`].
-fn idle_scrollers(scopes: &[ScopeView]) -> Vec<FocusId> {
+fn idle_scrollers(reach: &Reach) -> Vec<FocusId> {
     let (scrollers, holders) = scrollers_and_holders(|_| true);
     let focused = focused_signal().peek();
     scrollers
         .into_iter()
-        .filter(|scroller| idles(scroller, &holders, scopes, focused))
+        .filter(|scroller| idles(scroller, &holders, reach, focused))
         .map(|(id, _, _)| id)
         .collect()
 }
@@ -1115,16 +1329,7 @@ fn scroll_stop(id: FocusId, track: bool) -> bool {
             }
         }
     }
-    !idles(scroller, &holders, &scope_views(), focused)
-}
-
-fn scope_views() -> Vec<ScopeView> {
-    with_focus_ref(|s| {
-        s.scopes
-            .iter()
-            .map(|sc| (sc.node, sc.showing.clone(), sc.traps))
-            .collect()
-    })
+    !idles(scroller, &holders, &Reach::all(), focused)
 }
 
 /// Declares that `id` carries an on/off state, and how to read it now. What the state is — checked, pressed, selected, expanded — is its role's [`Role::toggle_kind`].
@@ -1394,7 +1599,7 @@ pub struct Exposed {
 ///
 /// Deliberately the same `reachable` the keyboard walks, so the two can never disagree about what is on screen — with one distinction Tab has no use for: a control kept out of reach by being *disabled* is reported as present and unavailable, where one inside a closed dialog is not reported at all.
 pub fn exposed() -> Vec<Exposed> {
-    let (order, (hiding, owners)) = with_focus_ref(|s| {
+    let order = with_focus_ref(|s| {
         // Called after the borrow drops: reading a state closure can read a signal, and that can flush effects back through this very slot.
         type Row = (
             FocusId,
@@ -1407,8 +1612,7 @@ pub fn exposed() -> Vec<Exposed> {
             Outline,
             ActionSupport,
         );
-        let order: Vec<Row> = s
-            .order
+        s.order
             .iter()
             .map(|e| {
                 (
@@ -1423,16 +1627,12 @@ pub fn exposed() -> Vec<Exposed> {
                     e.actions.support(),
                 )
             })
-            .collect();
-        let hiding: (Vec<ScopeView>, Vec<Option<NodeId>>) = s
-            .scopes
-            .iter()
-            .filter(|sc| sc.reason == ScopeReason::NotShowing)
-            .map(|sc| ((sc.node, sc.showing.clone(), sc.traps), sc.owner))
-            .unzip();
-        (order, hiding)
+            .collect::<Vec<Row>>()
     });
-    let idle = idle_scrollers(&hiding);
+    let gates = Reach::out_of_view();
+    let idle = idle_scrollers(&Reach::of(gates.clone(), false));
+    let read = Reach::of(gates, true);
+    let disabled = Disabled::now();
 
     order
         .into_iter()
@@ -1440,16 +1640,7 @@ pub fn exposed() -> Vec<Exposed> {
         .filter_map(
             |(id, node, role, toggled, value, help, orientation, outline, supports)| {
                 let node = node?;
-                let seen: Vec<ScopeView> = hiding
-                    .iter()
-                    .zip(&owners)
-                    .map(|((scope, showing, traps), owner)| {
-                        let owned =
-                            owner.is_some_and(|owner| crate::input_region::is_inside(node, owner));
-                        (*scope, showing.clone(), *traps && !owned)
-                    })
-                    .collect();
-                if !reachable(Some(node), &seen) {
+                if !read.admits(Some(node)) {
                     return None;
                 }
                 let help = help.now();
@@ -1457,7 +1648,7 @@ pub fn exposed() -> Vec<Exposed> {
                     id,
                     node,
                     role,
-                    enabled: !disabled_at(node),
+                    enabled: !disabled.at(node),
                     toggled: toggled.as_ref().map(|read| read()),
                     value: value.as_ref().and_then(|read| read()),
                     description: help.description,
@@ -1484,16 +1675,48 @@ pub fn exposed() -> Vec<Exposed> {
 
 /// Whether `node` is disabled now, by itself or by any box it sits inside: a control in a disabled wrapper is as unavailable as the wrapper, and says so to every reader.
 pub(crate) fn disabled_at(node: NodeId) -> bool {
-    let lineage: FxHashSet<NodeId> = crate::input_region::lineage(node).collect();
+    let line: Vec<NodeId> = crate::input_region::lineage(node).collect();
     // Only the wrappers around `node` are read, so a box re-emits when one of them is disabled and not when any other box is.
     let around: Vec<Rc<dyn Fn() -> bool>> = with_focus_ref(|s| {
-        s.scopes
-            .iter()
-            .filter(|sc| sc.reason == ScopeReason::Disabled && lineage.contains(&sc.node))
+        line.iter()
+            .filter_map(|at| s.scopes_at.get(at))
+            .flatten()
+            .filter_map(|id| s.scopes.get(*id))
+            .filter(|sc| sc.reason == ScopeReason::Disabled)
             .map(|sc| sc.showing.clone())
             .collect()
     });
     around.iter().any(|enabled| !enabled())
+}
+
+/// The scopes that disable a region, by the box they sit on, read once for a reader walking every control: [`disabled_at`] for each of them in the depth of the tree.
+struct Disabled(FxHashMap<NodeId, Vec<Rc<dyn Fn() -> bool>>>);
+
+impl Disabled {
+    fn now() -> Self {
+        let mut by_node: FxHashMap<NodeId, Vec<Rc<dyn Fn() -> bool>>> = FxHashMap::default();
+        with_focus_ref(|s| {
+            for scope in s
+                .scopes
+                .iter()
+                .filter(|sc| sc.reason == ScopeReason::Disabled)
+            {
+                by_node
+                    .entry(scope.node)
+                    .or_default()
+                    .push(scope.showing.clone());
+            }
+        });
+        Self(by_node)
+    }
+
+    fn at(&self, node: NodeId) -> bool {
+        crate::input_region::lineage(node).any(|at| {
+            self.0
+                .get(&at)
+                .is_some_and(|enabled| enabled.iter().any(|enabled| !enabled()))
+        })
+    }
 }
 
 /// The scopes that hold the keyboard inside themselves while they show, read once for a reader walking a whole frame: what keeps a box that is not a control out of what a reader is told, by the rule [`exposed`] keeps a control out by.
@@ -1505,9 +1728,10 @@ type ModalLayer = (NodeId, Rc<dyn Fn() -> bool>, Option<NodeId>);
 impl ModalLayers {
     pub(crate) fn now() -> Self {
         Self(with_focus_ref(|s| {
-            s.scopes
+            s.traps
                 .iter()
-                .filter(|sc| sc.traps && sc.reason == ScopeReason::NotShowing)
+                .filter_map(|id| s.scopes.get(*id))
+                .filter(|sc| sc.reason == ScopeReason::NotShowing)
                 .map(|sc| (sc.node, sc.showing.clone(), sc.owner))
                 .collect()
         }))
@@ -1624,12 +1848,12 @@ pub fn focusable_of(id: FocusId, role: Role, declared: Option<ConsumedKeys>) -> 
     let Some((node, stop, scroller)) = entry else {
         return Focusable::default();
     };
-    let scopes = scope_views();
-    if !reachable(node, &scopes) {
+    let reach = Reach::around(node);
+    if !reach.admits(node) {
         return Focusable::default();
     }
     let consumes = declared.unwrap_or_else(|| role.consumed_keys());
-    let trapped = scopes.iter().any(|(_, showing, traps)| *traps && showing());
+    let trapped = reach.is_trapped();
     Focusable {
         tab_stop: stop.is_stop() && (!scroller || tracks_scroll_stop(id)),
         consumes: if trapped {
@@ -1676,7 +1900,7 @@ pub fn control_nodes() -> Vec<NodeId> {
 
 /// Whether `id` is still registered, so a caller restoring remembered focus does not aim at a widget that has since been dropped.
 pub fn is_registered(id: FocusId) -> bool {
-    with_focus_ref(|s| s.order.iter().any(|e| e.id == id))
+    with_focus_ref(|s| s.order.contains(id))
 }
 
 /// Moves focus one stop along the order. Past either end the surface's [boundary](set_boundary) decides: focus wraps, or with no modal up and a boundary that releases, clears and leaves the way it went for the frame to carry on outside.
@@ -1722,13 +1946,14 @@ pub fn modal_layer_up() -> bool {
 
 /// Whether a modal is up and holding focus inside itself.
 fn trapped() -> bool {
-    let scopes: Vec<(Rc<dyn Fn() -> bool>, bool)> = with_focus_ref(|s| {
-        s.scopes
+    let traps: Vec<Rc<dyn Fn() -> bool>> = with_focus_ref(|s| {
+        s.traps
             .iter()
-            .map(|scope| (scope.showing.clone(), scope.traps))
+            .filter_map(|id| s.scopes.get(*id))
+            .map(|scope| scope.showing.clone())
             .collect()
     });
-    scopes.iter().any(|(showing, traps)| *traps && showing())
+    traps.iter().any(|showing| showing())
 }
 
 /// States what Tab past the last focusable, or Shift+Tab past the first, does in the active surface. [`Release`](FocusBoundary::Release) clears focus instead of wrapping and leaves the way it went for the surrounding tree to read; a modal up inside still holds Tab within itself.

@@ -1,9 +1,10 @@
-//! The plain geometric values every other crate speaks in: points, rects, sizes, colours, corner radii and affine transforms.
+//! The plain geometric values every other crate speaks in: points, rects, sizes, colours, corner radii and affine transforms, and an index of rects by the bands of a page they cross.
 //!
 //! Deliberately dependency-free, so layout, rendering and the widget tree can all name the same types without any of them depending on each other.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+mod bands;
 mod border_radius;
 mod box_model;
 mod cell_size;
@@ -17,6 +18,7 @@ mod size;
 mod transform;
 mod wire;
 
+pub use bands::Bands;
 pub use border_radius::BorderRadius;
 pub use box_model::BoxModel;
 pub use cell_size::CellSize;

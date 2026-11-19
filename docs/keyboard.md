@@ -139,6 +139,12 @@ Each platform states a `FocusBoundary` (`telar::FocusBoundary`, the `focus_bound
 
 A modal layer that holds focus traps Tab under either boundary: Tab wraps inside it. A control that keeps Tab, such as a text area that indents, keeps it at an end too.
 
+## Focus brings a control into view
+
+Focus that arrives from the keyboard or from the application brings the box it lands on into view in every scroll it sits in, moving each no further than it has to, as Tab does in a document: Tab past the bottom of a long list follows the list down. A box larger than a view that already shows part of it is left where it is, since what of it the keyboard is on, an editor's caret, is the box's own to bring into view. Focus a press gives is not moved: the box is under the pointer. A box not yet laid out is left where it is. The same on every target; on web-dom the browser scrolls the element it focuses as well, to the same place.
+
+Whether one control holds focus (`focus::is_focused`) is a signal of its own for each control: what reads it runs again when that control gains or loses focus, not whenever focus moves between two others, so a move of focus on a page of thousands of controls redraws the two it moved between.
+
 On web-dom the browser already walks past the last box, so `Release` only decides what the app does with a Tab it is handed. On a canvas the platform has to decide about a Tab before the app has heard it, so after each frame the runner tells the window, through `Window::set_tab_leaves`, which of Tab and Shift+Tab would run off an end. For those the platform leaves the default action alone, so the browser moves focus out of the surface, and does not deliver the key. A canvas drawn inside another tree (`NestedCanvas`) always releases, to the tree around it. A hot-reloaded build's window follows the boundary of the platform that shows it, like any window.
 
 ## Focus on web-dom

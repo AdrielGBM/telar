@@ -8,7 +8,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use geometry_core::{Rect, Transform};
+use geometry_core::{Bands, Rect, Transform};
 use i18n_core::LocaleTag;
 use layout_core::NodeId;
 use platform_core::{
@@ -66,6 +66,14 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
     graft(nodes, grafts)
 }
 
+/// Where a reader is told the control `id` stands now, in the surface's coordinates, as the snapshot places it: its box as the pointer finds it. `None` for a control that stands for no box laid out.
+///
+/// The one node's place without the whole snapshot, for a caller that follows a control as the canvas around it moves, as a check walking every stop of a long canvas does.
+pub fn control_rect(id: focus::FocusId) -> Option<Rect> {
+    let node = focus::node_of(id)?;
+    hit_rect(node).or_else(|| visible_rect(node))
+}
+
 /// What a reader is told about the surface entered now, which drew `commands`, leaving out every surface nested in its frame: [`snapshot`] for one surface, as a check that reads each surface in its own world wants it.
 pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
     surface_tree(commands).nodes
@@ -92,6 +100,14 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         .filter(|e| !reading.scope(e.node).hidden)
         .filter_map(|e| visible_rect(e.node).map(|rect| (e, rect)))
         .collect();
+    let control_at: FxHashMap<NodeId, usize> = controls
+        .iter()
+        .enumerate()
+        .rev()
+        .map(|(i, (e, _))| (e.node, i))
+        .collect();
+    let control_ids: FxHashSet<focus::FocusId> = controls.iter().map(|(e, _)| e.id).collect();
+    let inside_named = controls_inside(&reading.named, &controls);
     let focused = focus::current();
     let layers = focus::ModalLayers::now();
     let modal = |role: &Role, node: NodeId| *role == Role::Dialog && layers.holds(node);
@@ -132,10 +148,10 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 position: e.position,
                 lang: reading.scope(e.node).lang.clone(),
                 active_descendant: focus::active_descendant_state(e.id)
-                    .filter(|item| controls.iter().any(|(c, _)| c.id == *item))
+                    .filter(|item| control_ids.contains(item))
                     .map(AccessId::own),
                 controls: focus::controls_state(e.id)
-                    .filter(|item| controls.iter().any(|(c, _)| c.id == *item))
+                    .filter(|item| control_ids.contains(item))
                     .map(AccessId::own),
                 modal: modal(&e.role, e.node),
                 selection: (focused == Some(e.id))
@@ -147,11 +163,11 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         })
         .collect();
 
-    let is_control = |node: NodeId| controls.iter().any(|(e, _)| e.node == node);
+    let is_control = |node: NodeId| control_at.contains_key(&node);
     let words_of_title = |named: &Named| {
-        named
-            .titled
-            .filter(|_| named.role == Role::Group && wrapped_control(named, &controls).is_none())
+        named.titled.filter(|_| {
+            named.role == Role::Group && wrapped_control(named, &inside_named).is_none()
+        })
     };
     let mut titles: Vec<Vec<(usize, &str)>> = reading
         .titled
@@ -189,7 +205,7 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                 position: named.position,
                 named_box: Some(NamedBox {
                     node: named.node,
-                    wraps: wrapped_control(named, &controls),
+                    wraps: wrapped_control(named, &inside_named),
                     value: named.value.clone(),
                 }),
                 drawn_at: Some(named.opened_at),
@@ -200,21 +216,22 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         .chain(reading.text.iter().cloned())
         .filter(|piece| !piece.drawn_in.is_some_and(shut_out));
 
+    let bands = Bands::new(controls.iter().map(|(_, bounds)| *bounds));
     let mut drawn_values = vec![String::new(); controls.len()];
     for piece in pieces {
         let owner = match &piece.named_box {
             Some(NamedBox { wraps: Some(i), .. }) => Some(*i),
             // The control it is drawn inside, or failing that the smallest one whose box contains it, so a button inside a card is named by its own label.
-            _ => match piece.control.and_then(|node| {
-                controls
-                    .iter()
-                    .position(|(control, _)| control.node == node)
-            }) {
+            _ => match piece
+                .control
+                .and_then(|node| control_at.get(&node).copied())
+            {
                 Some(i) if holds_what_it_draws(&controls[i].0.role, named_controls[i]) => None,
                 Some(i) => Some(i),
-                None => controls
-                    .iter()
-                    .enumerate()
+                None => bands
+                    .at(piece.rect.y + piece.rect.height / 2.0)
+                    .into_iter()
+                    .map(|i| (i, &controls[i]))
                     .filter(|(i, (control, _))| {
                         !holds_what_it_draws(&control.role, named_controls[*i])
                     })
@@ -681,18 +698,30 @@ impl Piece {
 }
 
 /// The control a named box is no more than a wrapper around, as `<label>` is around its field: the one control inside it, when the box has no role of its own and draws nothing beside that control. A box with a role, such as a tab list or a navigation, or one holding several controls or content of its own, names itself.
-fn wrapped_control(named: &Named, controls: &[(focus::Exposed, Rect)]) -> Option<usize> {
-    let inside: Vec<usize> = controls
-        .iter()
-        .enumerate()
-        .filter(|(_, (control, _))| crate::input_region::is_inside(control.node, named.node))
-        .map(|(i, _)| i)
-        .take(2)
-        .collect();
+fn wrapped_control(named: &Named, inside: &FxHashMap<NodeId, Vec<usize>>) -> Option<usize> {
+    let inside = inside.get(&named.node).map_or(&[][..], Vec::as_slice);
     named
         .role
         .lends_name_to_control(named.drew_beside_controls, inside.len())
         .then(|| inside[0])
+}
+
+/// The first two of `controls`, by their place among them, inside each of the `named` boxes, the box itself counting when it is a control: all [`wrapped_control`] asks, found by walking up from each control once rather than over every control for each box.
+fn controls_inside(
+    named: &[Named],
+    controls: &[(focus::Exposed, Rect)],
+) -> FxHashMap<NodeId, Vec<usize>> {
+    let boxes: FxHashSet<NodeId> = named.iter().map(|named| named.node).collect();
+    let mut inside: FxHashMap<NodeId, Vec<usize>> = FxHashMap::default();
+    for (i, (control, _)) in controls.iter().enumerate() {
+        for at in crate::input_region::lineage(control.node).filter(|at| boxes.contains(at)) {
+            let found = inside.entry(at).or_default();
+            if found.len() < 2 {
+                found.push(i);
+            }
+        }
+    }
+    inside
 }
 
 /// What an element's ancestors said that reaches it.
@@ -882,6 +911,8 @@ struct Open {
 struct Reading {
     scopes: FxHashMap<NodeId, Scope>,
     named: Vec<Named>,
+    /// Where in [`named`](Self::named) each named box is, the first time the frame draws it.
+    named_at: FxHashMap<NodeId, usize>,
     stated: Vec<Stated>,
     structures: Vec<Structure>,
     titled: Vec<Titled>,
@@ -1047,6 +1078,10 @@ impl Reading {
                                 drew_art: false,
                                 drew_beside_controls: false,
                             });
+                            reading
+                                .named_at
+                                .entry(node)
+                                .or_insert(reading.named.len() - 1);
                             inner_titled = None;
                             Some(reading.named.len() - 1)
                         }
@@ -1185,10 +1220,7 @@ impl Reading {
     }
 
     fn label_of(&self, node: NodeId) -> Option<&str> {
-        self.named
-            .iter()
-            .find(|named| named.node == node)
-            .map(|named| &*named.label)
+        self.named_at.get(&node).map(|&i| &*self.named[i].label)
     }
 
     fn parent_of(&self, node: NodeId) -> Option<NodeId> {

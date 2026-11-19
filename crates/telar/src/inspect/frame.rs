@@ -71,14 +71,19 @@ impl Frame {
 
     /// The frame `canvas` shows now, in the direction and language it lays out and translates in, with what a reader and the keyboard are told about it.
     pub fn capture(canvas: &SurfaceCanvas) -> Self {
+        let frame = Self::drawn(canvas);
+        let access = canvas.with_entered(|| FrameAccess::read(&frame.commands));
+        frame.with_access(Some(access))
+    }
+
+    /// [`capture`](Self::capture) without what a reader and the keyboard are told: the picture alone, to compare with another, for a caller that reads what it needs to know about the canvas some other way.
+    pub fn drawn(canvas: &SurfaceCanvas) -> Self {
         let commands: Arc<[DrawCommand]> = canvas.frame_commands().iter().cloned().collect();
         let size = canvas.size();
         canvas.with_entered(|| {
-            let access = FrameAccess::read(&commands);
             Self::new(commands, size)
                 .with_direction(crate::current_direction())
                 .with_lang(i18n_core::current_locale())
-                .with_access(Some(access))
         })
     }
 

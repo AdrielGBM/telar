@@ -1572,3 +1572,35 @@ fn set_children_under_a_dead_parent_errs_silently() {
 fn handle(id: u64) -> SurfaceHandle {
     SurfaceHandle::from_raw(NonZeroU64::new(id).expect("a surface id counts from one"))
 }
+
+/// A list that reconciles to the children it has, and a style closure that runs again for a signal its style does not depend on, change nothing about the layout, so nothing is laid out again: on a page of thousands of nodes a pass is the whole page.
+#[test]
+fn restating_a_layout_lays_out_nothing_anew() {
+    reset_layout_runtime();
+    let (a, _) = new_leaf(LayoutStyle::new().height(20.0)).unwrap();
+    let (b, _) = new_leaf(LayoutStyle::new().height(20.0)).unwrap();
+    let list = new_container(LayoutStyle::new().flex_column(), &[a, b]).unwrap();
+    compute_layout(
+        list,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    let passes = layout_passes();
+
+    set_children(list, &[a, b]).unwrap();
+    set_layout_style(a, LayoutStyle::new().height(20.0)).unwrap();
+    relayout_if_dirty();
+    assert_eq!(layout_passes(), passes);
+
+    set_layout_style(a, LayoutStyle::new().height(30.0)).unwrap();
+    relayout_if_dirty();
+    assert_eq!(
+        layout_passes(),
+        passes + 1,
+        "a style that changed is laid out"
+    );
+    set_children(list, &[b, a]).unwrap();
+    relayout_if_dirty();
+    assert_eq!(layout_passes(), passes + 2, "and children that moved");
+}

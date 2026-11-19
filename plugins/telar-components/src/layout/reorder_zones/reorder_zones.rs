@@ -1,21 +1,27 @@
-//! [`ReorderGroup`]: items dragged within and between several containers of a [`DragSession`], dropped between items or onto one, with a drop preview, drag-out-to-detach and a keyboard step.
+//! [`ReorderGroup`]: items dragged within and between several containers of a [`DragSession`], dropped between items or onto one, with a drop preview, drag-out-to-detach and a keyboard step; a container of a long list builds only the items its scroll shows.
 
 use std::cell::{Cell, RefCell};
+use std::num::NonZeroU32;
 use std::rc::Rc;
 
 use telar::{
     AreaLayout, Axis, Border, BorderRadius, Chord, ConsumedKeys, Container, DragItem, DragSession,
     DropArea, DropAreaId, DropPlace, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, NodeId,
     Props, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension,
-    StyledContainer, Transform, after_settle, box_item, chord_pressed,
-    focus::{self, FocusId, Role},
+    StyledContainer, Transform, VirtualList, VirtualRows, after_settle, box_item, chord_pressed,
+    effect,
+    focus::{self, FocusId, Role, SetPosition},
     on_cleanup, track_layout,
 };
 
+use crate::shared::rows::RowKey;
 use crate::shared::{self, drag_label::drag_label};
 
 /// One item's widget, built on demand from its position in the caller's storage.
 pub type ItemBuilder = Rc<dyn Fn(usize) -> Result<Box<dyn LayoutItem>, LayoutError>>;
+
+/// One item's widget in a [`virtual_zone`](ReorderGroup::virtual_zone), built when it scrolls into view from its position and the key the caller names it by.
+pub type KeyedItemBuilder<K> = Rc<dyn Fn(usize, K) -> Result<Box<dyn LayoutItem>, LayoutError>>;
 
 /// An item's place: which container, and where in it. As a drop place, `index` counts slots in that container before the move, the frame [`telar::apply_move`] reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -75,10 +81,21 @@ struct FrozenZone {
     axis: Axis,
 }
 
+/// Where a container's items stand.
+enum Extent {
+    /// Every item is built, and stands where layout put its box.
+    Built(Rc<RefCell<Vec<Option<RwSignal<Rect>>>>>),
+    /// Only the items the scroll shows are built, and every item stands where `rows` places it, across the box `list` the rows are laid out in.
+    Rows {
+        rows: VirtualRows,
+        list: RwSignal<Rect>,
+    },
+}
+
 struct Zone {
     area: Cell<Option<DropAreaId>>,
     rect: RwSignal<Rect>,
-    items: Rc<RefCell<Vec<Option<RwSignal<Rect>>>>>,
+    extent: Extent,
     count: Reactive<usize>,
     axis: Axis,
 }
@@ -86,13 +103,22 @@ struct Zone {
 impl Zone {
     fn freeze(&self, zone: usize) -> FrozenZone {
         let len = self.count.get();
-        let items = self
-            .items
-            .borrow()
-            .iter()
-            .take(len)
-            .map(|slot| slot.as_ref().map(|rect| rect.peek()).unwrap_or_default())
-            .collect();
+        let items = match &self.extent {
+            Extent::Built(items) => items
+                .borrow()
+                .iter()
+                .take(len)
+                .map(|slot| slot.as_ref().map(|rect| rect.peek()).unwrap_or_default())
+                .collect(),
+            Extent::Rows { rows, list } => {
+                let list = list.get();
+                rows.spans()
+                    .into_iter()
+                    .take(len)
+                    .map(|(top, height)| Rect::new(list.x, top, list.width, height))
+                    .collect()
+            }
+        };
         FrozenZone {
             zone,
             rect: self.rect.peek(),
@@ -131,10 +157,12 @@ impl<P> Default for Reports<P> {
 
 struct Group<P: Clone + 'static> {
     session: DragSession<P>,
-    payload: Rc<dyn Fn(Slot) -> P>,
+    payload: Rc<dyn Fn(Slot) -> Option<P>>,
     zones: RefCell<Vec<(usize, Rc<Zone>)>>,
-    /// Each item's box with the slot it stands for: how the group tells which of its items the session carries.
+    /// Each built item's box with the slot it stands for and its control: what the keyboard is given back to once a step has moved an item.
     items: RefCell<Vec<(NodeId, Slot, Option<FocusId>)>>,
+    /// The box and the slot of the item last picked up: how the group knows its own item in hand, built or not, while the session carries it from that box.
+    picked: Cell<Option<(NodeId, Slot)>>,
     /// The containers as they were when an item of the group was picked up, so the slots the pointer is measured against are the ones the user saw, and a gap the stroke opens cannot move the slot that opened it.
     frozen: RefCell<Rc<Vec<FrozenZone>>>,
     reports: RefCell<Reports<P>>,
@@ -143,11 +171,11 @@ struct Group<P: Clone + 'static> {
     reach: Cell<Reach>,
 }
 
-/// A set of containers, built with [`zone`](Self::zone), whose items are dragged within and between them, and to and from the other areas of the same [`DragSession`].
+/// A set of containers, built with [`zone`](Self::zone), or with [`virtual_zone`](Self::virtual_zone) for a long list that builds only what its scroll shows, whose items are dragged within and between them, and to and from the other areas of the same [`DragSession`].
 ///
 /// An item carries what `payload` makes of its [`Slot`]. A container takes a payload between two of its items, or onto one where [`accepts`](Self::accepts) allows it, and the group reports the drop through [`on_drop`](Self::on_drop) and writes nothing itself. Alt+↑ and Alt+↓ on a focused item move it one gap earlier or later, reported the same way. A click or Enter on an item is the caller's through [`on_activate`](Self::on_activate); the group takes no other key, so Space and the bare arrows stay the caller's, and Enter too without it.
 ///
-/// The options are read as each container is built, so they are set before the first [`zone`](Self::zone).
+/// The options are read as each container is built, so they are set before the first container.
 pub struct ReorderGroup<P: Clone + 'static>(Rc<Group<P>>);
 
 impl<P: Clone + 'static> Clone for ReorderGroup<P> {
@@ -157,13 +185,14 @@ impl<P: Clone + 'static> Clone for ReorderGroup<P> {
 }
 
 impl<P: Clone + 'static> ReorderGroup<P> {
-    /// A group whose items are carried in `session`, each as what `payload` makes of its slot.
-    pub fn new(session: &DragSession<P>, payload: impl Fn(Slot) -> P + 'static) -> Self {
+    /// A group whose items are carried in `session`, each as what `payload` makes of its slot. An item whose payload is `None` stays where it is, from the pointer and the keyboard: a heading among the items of a list, which a drop still lands before, after or onto as [`accepts`](Self::accepts) says.
+    pub fn new(session: &DragSession<P>, payload: impl Fn(Slot) -> Option<P> + 'static) -> Self {
         Self(Rc::new(Group {
             session: session.clone(),
             payload: Rc::new(payload),
             zones: RefCell::new(Vec::new()),
             items: RefCell::new(Vec::new()),
+            picked: Cell::new(None),
             frozen: RefCell::new(Rc::new(Vec::new())),
             reports: RefCell::default(),
             threshold: Cell::new(4.0),
@@ -253,26 +282,124 @@ impl<P: Clone + 'static> ReorderGroup<P> {
             let zone_items = zone_items.clone();
             let count = count.clone();
             move |at: usize| {
+                let child = item(at)?;
+                let rect = track_layout(child.layout_node()).ok_or_else(|| {
+                    LayoutError::Engine(
+                        "reorder zone: an item's layout node is not in the live tree".into(),
+                    )
+                })?;
+                remember(&zone_items, at, rect);
                 group.item(
                     Slot::new(index, at),
                     ItemLayout {
                         axis,
                         gap,
                         count: count.clone(),
+                        counted: false,
                     },
-                    &item,
-                    &zone_items,
+                    child,
                 )
             }
         };
         let list = ReactiveList::new(source, |at: &usize| *at, build, gap)?;
         let list = if row { list.as_row() } else { list };
+        self.container(
+            index,
+            box_item(list),
+            Extent::Built(zone_items),
+            Lane {
+                count,
+                axis,
+                gap,
+                min_extent,
+            },
+        )
+    }
 
+    /// One container of the group running down a scroll, holding one item for each of `items` and building only those the scroll shows, so a list of thousands of items costs what a screenful does.
+    ///
+    /// Every item is a drop target and a stop for the keyboard's step whether it is built or not: the container places the ones it has not built where `rows` says they stand. An item in hand stays in hand when it scrolls out of the built window, and Alt+↑ or Alt+↓ steps the focused item past the edge of the view, which follows it.
+    ///
+    /// Build it inside the content of the scroll `rows` was made for (see [`VirtualRows::new`]); it may sit below anything else in that content. Items are stacked as they come, so the space between them belongs inside what `item` builds.
+    pub fn virtual_zone<K: RowKey>(
+        &self,
+        props: VirtualZoneProps<K>,
+    ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let VirtualZoneProps {
+            zone: index,
+            items,
+            item,
+            rows,
+            overscan,
+            min_extent,
+        } = props;
+        let count = {
+            let items = items.clone();
+            Reactive::of(move || items.get().len())
+        };
+        let build = {
+            let group = Rc::clone(&self.0);
+            let count = count.clone();
+            move |at: usize, key: K| {
+                let child = item(at, key)?;
+                group.item(
+                    Slot::new(index, at),
+                    ItemLayout {
+                        axis: Axis::Vertical,
+                        gap: 0.0,
+                        count: count.clone(),
+                        counted: true,
+                    },
+                    child,
+                )
+            }
+        };
+        let list = VirtualList::measured(
+            LayoutStyle::column(),
+            rows.clone(),
+            overscan,
+            move || items.get(),
+            |key: &K| key.clone(),
+            build,
+        )?;
+        let list_rect = track_layout(list.layout_node()).ok_or_else(|| {
+            LayoutError::Engine("reorder zone: its list is not in the live tree".into())
+        })?;
+        self.container(
+            index,
+            box_item(list),
+            Extent::Rows {
+                rows,
+                list: list_rect,
+            },
+            Lane {
+                count,
+                axis: Axis::Vertical,
+                gap: 0.0,
+                min_extent,
+            },
+        )
+    }
+
+    /// Container `index` around `list`, its items standing as `extent` says, registered with the group and as an area of the session.
+    fn container(
+        &self,
+        index: usize,
+        list: Box<dyn LayoutItem>,
+        extent: Extent,
+        lane: Lane,
+    ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let Lane {
+            count,
+            axis,
+            gap,
+            min_extent,
+        } = lane;
         let container = Container::new(
             LayoutStyle::column()
                 .min_width(min_extent)
                 .min_height(min_extent),
-            vec![box_item(list), insertion_line(&self.0, index, axis, gap)?],
+            vec![list, insertion_line(&self.0, index, axis, gap)?],
         )?
         .role(Role::List);
         let node = container.layout_node();
@@ -282,7 +409,7 @@ impl<P: Clone + 'static> ReorderGroup<P> {
         let zone = Rc::new(Zone {
             area: Cell::new(None),
             rect,
-            items: zone_items,
+            extent,
             count,
             axis,
         });
@@ -293,11 +420,31 @@ impl<P: Clone + 'static> ReorderGroup<P> {
     }
 }
 
+/// How a container runs: how many items it holds, along which axis, how far apart, and the least it measures on both axes.
+struct Lane {
+    count: Reactive<usize>,
+    axis: Axis,
+    gap: f32,
+    min_extent: f32,
+}
+
 /// What an item needs to know of the container it sits in.
 struct ItemLayout {
     axis: Axis,
     gap: f32,
     count: Reactive<usize>,
+    /// Whether the item says where it stands among them all, as an item of a container that builds only some of them has to: a reader cannot count the items that are not built.
+    counted: bool,
+}
+
+/// The place of the item at `index` among `count`.
+fn place(index: usize, count: usize) -> SetPosition {
+    let count = count.max(index + 1);
+    SetPosition {
+        level: NonZeroU32::MIN,
+        position: NonZeroU32::MIN.saturating_add(u32::try_from(index).unwrap_or(u32::MAX - 1)),
+        size: NonZeroU32::new(u32::try_from(count).unwrap_or(u32::MAX)).unwrap_or(NonZeroU32::MAX),
+    }
 }
 
 impl<P: Clone + 'static> Group<P> {
@@ -348,22 +495,19 @@ impl<P: Clone + 'static> Group<P> {
         })
     }
 
+    /// Wraps `child`, the item at `slot`, in what makes it an item of the group: the drop highlight, the label beside the pointer, the step, the activation and the pick-up.
     fn item(
         self: &Rc<Self>,
         slot: Slot,
         layout: ItemLayout,
-        item: &ItemBuilder,
-        zone_items: &Rc<RefCell<Vec<Option<RwSignal<Rect>>>>>,
+        child: Box<dyn LayoutItem>,
     ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-        let child = item(slot.index)?;
-        let rect = track_layout(child.layout_node()).ok_or_else(|| {
-            LayoutError::Engine(
-                "reorder zone: an item's layout node is not in the live tree".into(),
-            )
-        })?;
-        remember(zone_items, slot.index, rect);
-
-        let ItemLayout { axis, gap, count } = layout;
+        let ItemLayout {
+            axis,
+            gap,
+            count,
+            counted,
+        } = layout;
         let label = self.reports.borrow().label.clone();
         let mut children = vec![child];
         if label.is_some() {
@@ -388,6 +532,7 @@ impl<P: Clone + 'static> Group<P> {
         let mut wrapper = StyledContainer::new(LayoutStyle::new(), highlight, children)?;
         if self.drop_preview.get() == DropPreview::Gap {
             let group = Rc::clone(self);
+            let count = count.clone();
             // Read only inside the restyle effect: `item` runs inside the list's reconcile effect, and a read here would reconcile the list from inside its own event dispatch.
             wrapper = wrapper.styled_by(move || group.gap_style(slot, count.get(), axis, gap));
         }
@@ -416,6 +561,10 @@ impl<P: Clone + 'static> Group<P> {
                 let group = Rc::clone(self);
                 move |key: &Key| -> bool { group.step_key(slot, key) }
             });
+        if counted && let Some(id) = wrapper.focus_id() {
+            let count = count.clone();
+            effect(move || focus::set_position(id, place(slot.index, count.get())));
+        }
         let node = wrapper.layout_node();
         self.items
             .borrow_mut()
@@ -429,8 +578,10 @@ impl<P: Clone + 'static> Group<P> {
         let mut picked = DragItem::new({
             let group = Rc::clone(self);
             move || {
+                let payload = (group.payload)(slot)?;
                 group.freeze();
-                Some((group.payload)(slot))
+                group.picked.set(Some((node, slot)));
+                Some(payload)
             }
         })
         .threshold(self.threshold.get());
@@ -457,17 +608,30 @@ impl<P: Clone + 'static> Group<P> {
         *self.frozen.borrow_mut() = Rc::new(frozen);
     }
 
+    /// The group's own item in hand, reactively: known by the box the session carries it from, which a container that builds only what its scroll shows may have dropped since.
     fn carried(&self) -> Option<Slot> {
         let from = self.session.carried_from()?;
-        self.items
-            .borrow()
-            .iter()
-            .find(|(node, _, _)| *node == from)
-            .map(|(_, slot, _)| *slot)
+        self.picked
+            .get()
+            .filter(|(node, _)| *node == from)
+            .map(|(_, slot)| slot)
     }
 
     /// Gives focus to the item that stands at `slot`, once the move that put something there has been built.
+    /// In a container that builds only what its scroll shows, the item is brought into view first, so that it is built to be given focus.
     fn focus_at(self: &Rc<Self>, slot: Slot) {
+        let rows = self
+            .zones
+            .borrow()
+            .iter()
+            .find(|(index, _)| *index == slot.zone)
+            .and_then(|(_, zone)| match &zone.extent {
+                Extent::Rows { rows, .. } => Some(rows.clone()),
+                Extent::Built(_) => None,
+            });
+        if let Some(rows) = rows {
+            rows.reveal(slot.index, 0.0);
+        }
         let group = Rc::downgrade(self);
         after_settle(move || {
             let Some(group) = group.upgrade() else {
@@ -557,7 +721,9 @@ impl<P: Clone + 'static> Group<P> {
         } else {
             return false;
         };
-        let payload = (self.payload)(slot);
+        let Some(payload) = (self.payload)(slot) else {
+            return false;
+        };
         if let Some(to) = self.stepped(slot, by, &payload) {
             self.report(Some(slot), payload, DropPlace::Between(to));
             let landed = match to.zone == slot.zone && to.index > slot.index {
@@ -730,6 +896,27 @@ pub struct ReorderZoneProps {
     pub row: bool,
     #[props(default)]
     pub gap: f32,
+    /// The smallest the container gets on both axes, so an empty one is still somewhere to drop.
+    #[props(default = shared::MIN_TARGET)]
+    pub min_extent: f32,
+}
+
+/// One container of a [`ReorderGroup`] that builds only the items its scroll shows: see [`ReorderGroup::virtual_zone`].
+#[derive(Props)]
+pub struct VirtualZoneProps<K: RowKey> {
+    /// This container's number in the group. The keyboard steps through containers in this order.
+    #[props(default)]
+    pub zone: usize,
+    /// The key of each item, in order: what the caller names it by, and what its measured height is remembered under while it moves, folds away or scrolls out of view. Unique among the items.
+    #[props(into, default)]
+    pub items: Reactive<Vec<K>>,
+    /// Builds the item at a position from its key, when it scrolls into view.
+    pub item: KeyedItemBuilder<K>,
+    /// Where the items stand, built or not, in the scroll the container is drawn in: made with [`VirtualRows::new`] from that scroll's viewport, with an estimate of a typical item's height, and kept to bring an item into view.
+    pub rows: VirtualRows,
+    /// How far past each edge of the view items are built, in px, so a scroll shows an item that is already there.
+    #[props(default = 200.0)]
+    pub overscan: f32,
     /// The smallest the container gets on both axes, so an empty one is still somewhere to drop.
     #[props(default = shared::MIN_TARGET)]
     pub min_extent: f32,

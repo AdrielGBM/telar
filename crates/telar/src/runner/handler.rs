@@ -1003,7 +1003,9 @@ where
         let clear = self.app.clear_color();
         let commands_ref = self.tree.as_ref().map(|t| t.frame());
         let base_slice: &[renderer_core::DrawCommand] = commands_ref.as_deref().unwrap_or(&[]);
-        if let Some(tree) = &self.tree {
+        if let Some(tree) = &self.tree
+            && self.dev.wants_tree()
+        {
             let mut nodes = Vec::new();
             tree.walk(&mut nodes);
             self.dev.on_tree(&nodes);

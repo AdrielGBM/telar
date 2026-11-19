@@ -1,19 +1,20 @@
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use telar::preview::{
-    Layout, Matrix, Play, PlayResult, PreviewEntry, Query, by_role, by_text, preview,
+    Layout, Matrix, Play, PlayError, PlayResult, PreviewEntry, Query, by_role, by_text, preview,
 };
 use telar::{
-    AreaLayout, Axis, Container, DragSession, DropArea, DropPlace, Key, LayoutError, LayoutItem,
-    NamedKey,
-    LayoutStyle, Reactive, RectStyle, Role, RwSignal, StyledContainer, box_item, signal,
-    track_layout,
+    AlignItems, AreaLayout, Axis, Container, DragSession, DropArea, DropPlace, Key, LayoutError,
+    LayoutItem, LayoutScrollArea, LayoutStyle, NamedKey, Reactive, RectStyle, Role, RwSignal,
+    StyledContainer, VirtualRows, box_item, memo, signal, track_layout,
 };
 
 use super::sample;
 use crate::layout::reorder_zones::reorder_zones::{
-    DropPreview, ReorderGroup, ReorderZoneProps, Slot, apply_zone_move,
+    DropPreview, ReorderGroup, ReorderZoneProps, Slot, VirtualZoneProps, apply_zone_move,
 };
+use crate::{ButtonProps, button};
 
 /// Drags what `from` finds to the point `down` of the way down what `to` finds, as a hand carries a row onto another.
 fn drag_onto(canvas: &mut Play, from: Query, to: Query, down: f32) -> PlayResult {
@@ -47,7 +48,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 vec!["Design", "Review"],
                 vec!["Build", "Test", "Ship"],
             ]);
-            let group = ReorderGroup::new(&DragSession::new(), |slot| slot)
+            let group = ReorderGroup::new(&DragSession::new(), Some)
                 .drop_preview(p.arg("drop_preview", DropPreview::Line))
                 .on_drop(move |from, place| {
                     if let DropPlace::Between(to) = place {
@@ -106,7 +107,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let is_folder = move |slot: Slot| {
                 entries.with(|entries| matches!(entries.get(slot.index), Some(Entry::Folder(..))))
             };
-            let group = ReorderGroup::new(&DragSession::new(), |slot| slot)
+            let group = ReorderGroup::new(&DragSession::new(), Some)
                 .accepts(move |from, place| match place {
                     DropPlace::Between(_) => true,
                     DropPlace::Inside(into) => is_folder(into) && !is_folder(*from),
@@ -156,7 +157,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let tags = signal(vec!["Draft", "Review", "Ship"]);
             let binned = signal(0usize);
             let session = DragSession::new();
-            let strip = ReorderGroup::new(&session, |slot: Slot| slot.index)
+            let strip = ReorderGroup::new(&session, |slot: Slot| Some(slot.index))
                 .on_drop(move |from, place| {
                     if let DropPlace::Between(to) = place {
                         tags.update(|tags| {
@@ -200,7 +201,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(reorder_zones, "Opened on a click", |_p| {
             let pages = signal(vec!["Cover", "Contents", "Chapter one"]);
             let opened = signal(None::<&'static str>);
-            let list = ReorderGroup::new(&DragSession::new(), |slot: Slot| slot)
+            let list = ReorderGroup::new(&DragSession::new(), Some)
                 .on_drop(move |from, place| {
                     if let DropPlace::Between(to) = place {
                         pages.update(|pages| {
@@ -208,7 +209,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         });
                     }
                 })
-                .on_activate(move |slot| opened.set(pages.with(|pages| pages.get(slot.index).copied())))
+                .on_activate(move |slot| {
+                    opened.set(pages.with(|pages| pages.get(slot.index).copied()))
+                })
                 .zone(
                     ReorderZoneProps::props()
                         .count(Reactive::of(move || pages.get().len()))
@@ -250,6 +253,78 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 &["Contents", "Chapter one", "Cover"],
             )
         }),
+        preview!(reorder_zones, "Sections of a long text", |_p| {
+            let sections = signal(
+                (0..SECTIONS)
+                    .map(|section| (section * SENTENCES..(section + 1) * SENTENCES).collect())
+                    .collect::<Vec<Vec<usize>>>(),
+            );
+            let folded = signal(BTreeSet::<usize>::new());
+            let lines = memo(move || {
+                sections.with(|sections| folded.with(|folded| lines_of(sections, folded)))
+            });
+            let line_at = move |slot: Slot| lines.with(|lines| lines.get(slot.index).copied());
+            let group =
+                ReorderGroup::new(&DragSession::new(), move |slot: Slot| match line_at(slot) {
+                    Some(Line::Sentence(id)) => Some(id),
+                    _ => None,
+                })
+                .accepts(move |_, place| match place {
+                    DropPlace::Between(to) => to.index > 0,
+                    DropPlace::Inside(onto) => matches!(line_at(onto), Some(Line::Heading(_))),
+                })
+                .label(move |slot| match line_at(slot) {
+                    Some(Line::Sentence(id)) => format!("Sentence {id}"),
+                    _ => String::new(),
+                })
+                .on_drop(move |id, place| {
+                    let lines = lines.get();
+                    sections.update(|sections| move_sentence(sections, &lines, id, place));
+                });
+            let scroll = LayoutScrollArea::new_with(
+                LayoutStyle::column().flex_grow(1.0).min_height(0.0),
+                move |viewport| {
+                    let zone = group.virtual_zone(
+                        VirtualZoneProps::props()
+                            .items(Reactive::of(move || lines.get()))
+                            .item(Rc::new(move |_, line| match line {
+                                Line::Heading(section) => heading(section, folded),
+                                Line::Sentence(id) => {
+                                    sample::tile(Reactive::of(move || format!("Sentence {id}")))
+                                }
+                            }))
+                            .rows(VirtualRows::new(viewport, 44.0))
+                            .build(),
+                    )?;
+                    Ok(box_item(Container::new(
+                        LayoutStyle::column().gap(12.0).padding_all(16.0),
+                        vec![
+                            sample::text(
+                                "100 sections of 30 sentences: only what the scroll shows is built",
+                            )?,
+                            zone,
+                        ],
+                    )?))
+                },
+            )?
+            .stop_label(|| "A long text");
+            Ok::<_, LayoutError>(Container::new(
+                LayoutStyle::column().flex_grow(1.0).min_height(0.0),
+                vec![box_item(scroll)],
+            )?)
+        })
+        .props(<VirtualZoneProps<Line> as telar::preview::HasPropsSchema>::schema)
+        .title("Layout/Reorder zones")
+        .layout(Layout::Fullscreen)
+        .tags(&["stateful"])
+        .play(|canvas| {
+            let sentence = |id: usize| by_role(Role::ListItem).named(format!("Sentence {id}"));
+            drag_onto(canvas, sentence(0), sentence(2), 0.75)?;
+            expect_place(canvas, &sentence(0), 4)?;
+            canvas.click(by_role(Role::Button).named("Fold section 0"))?;
+            canvas.expect_absent(sentence(1))?;
+            expect_place(canvas, &by_role(Role::ListItem).named("Section 1"), 2)
+        }),
     ]
 }
 
@@ -290,4 +365,111 @@ fn bin(
         }),
     );
     Ok(box_item(bin))
+}
+
+const SECTIONS: usize = 100;
+const SENTENCES: usize = 30;
+
+/// One line of the long text: a section's heading, or a sentence by its id.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Line {
+    Heading(usize),
+    Sentence(usize),
+}
+
+/// The text as one list: each section's heading, then its sentences unless it is folded.
+fn lines_of(sections: &[Vec<usize>], folded: &BTreeSet<usize>) -> Vec<Line> {
+    sections
+        .iter()
+        .enumerate()
+        .flat_map(|(section, sentences)| {
+            let shown = match folded.contains(&section) {
+                true => &[][..],
+                false => sentences.as_slice(),
+            };
+            std::iter::once(Line::Heading(section))
+                .chain(shown.iter().map(|id| Line::Sentence(*id)))
+        })
+        .collect()
+}
+
+/// Moves sentence `id` to `place` among `lines`, the text as it was shown when it was let go: after the line before a gap, or at the end of a section dropped onto its heading.
+fn move_sentence(sections: &mut [Vec<usize>], lines: &[Line], id: usize, place: DropPlace<Slot>) {
+    let target = match place {
+        DropPlace::Inside(onto) => match lines.get(onto.index) {
+            Some(Line::Heading(section)) => Target::End(*section),
+            _ => return,
+        },
+        DropPlace::Between(to) => match to.index.checked_sub(1).and_then(|at| lines.get(at)) {
+            Some(Line::Heading(section)) => Target::Start(*section),
+            Some(Line::Sentence(after)) if *after != id => Target::After(*after),
+            _ => return,
+        },
+    };
+    for sentences in sections.iter_mut() {
+        sentences.retain(|at| *at != id);
+    }
+    match target {
+        Target::Start(section) => sections[section].insert(0, id),
+        Target::End(section) => sections[section].push(id),
+        Target::After(after) => {
+            for sentences in sections.iter_mut() {
+                if let Some(at) = sentences.iter().position(|at| *at == after) {
+                    sentences.insert(at + 1, id);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+enum Target {
+    Start(usize),
+    End(usize),
+    After(usize),
+}
+
+/// A section's heading, with the button that folds its sentences away and back.
+fn heading(
+    section: usize,
+    folded: RwSignal<BTreeSet<usize>>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let is_folded = move || folded.with(|folded| folded.contains(&section));
+    let fold = button(
+        ButtonProps::props()
+            .label(Reactive::of(move || match is_folded() {
+                true => format!("Unfold section {section}"),
+                false => format!("Fold section {section}"),
+            }))
+            .on_press(move || {
+                folded.update(|folded| {
+                    if !folded.remove(&section) {
+                        folded.insert(section);
+                    }
+                })
+            })
+            .build(),
+    )?;
+    Ok(box_item(Container::new(
+        LayoutStyle::row()
+            .align_items(AlignItems::CENTER)
+            .gap(12.0)
+            .padding_top(12.0)
+            .padding_bottom(4.0),
+        vec![
+            sample::text_of(Reactive::of(move || format!("Section {section}")))?,
+            fold,
+        ],
+    )?))
+}
+
+/// That the item `query` matches says it stands at `place` among all the items, counted from one.
+fn expect_place(canvas: &mut Play, query: &Query, place: u32) -> PlayResult {
+    let found = canvas.find(query)?.position.map(|at| at.position.get());
+    match found == Some(place) {
+        true => Ok(()),
+        false => Err(PlayError::new(format!(
+            "expected {query} at {place}, but it is at {found:?}"
+        ))),
+    }
 }

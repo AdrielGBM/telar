@@ -63,6 +63,7 @@ mod press;
 mod reactive_list;
 mod rect;
 mod reorder;
+mod roster;
 mod roving;
 mod row_keys;
 mod scroll_area;

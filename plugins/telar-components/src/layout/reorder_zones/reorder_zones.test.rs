@@ -5,7 +5,7 @@ use std::time::Duration;
 use telar::testing::{advance_time, hold, key_with, lay_out, moved, named, press, release, route};
 use telar::{
     ComponentList, Container, Key, LayoutScrollArea, ModifiersState, NamedKey, Reactive, RectStyle,
-    RwSignal, ScrollViewport, StyledContainer, box_item, signal,
+    RwSignal, ScrollViewport, StyledContainer, VirtualRows, box_item, signal,
 };
 
 use super::*;
@@ -64,7 +64,7 @@ fn board_with(
     let detached: Detached = Rc::default();
     let session = DragSession::new();
 
-    let mut group = ReorderGroup::new(&session, |slot| slot)
+    let mut group = ReorderGroup::new(&session, Some)
         .drag_threshold(threshold)
         .on_drop(recording(items, &drops));
     if detachable {
@@ -507,7 +507,7 @@ fn long_list() -> LongList {
     let items = signal(vec![('a'..='l').collect::<Vec<char>>()]);
     let drops: Drops = Rc::default();
     let session = DragSession::new();
-    let group = ReorderGroup::new(&session, |slot| slot)
+    let group = ReorderGroup::new(&session, Some)
         .drag_threshold(0.0)
         .on_drop(recording(items, &drops));
     let mut viewport = None;
@@ -638,4 +638,235 @@ fn a_click_or_enter_on_an_item_opens_it_and_a_drag_does_not() {
     board.drag((10.0, 20.0), &[(60.0, 20.0), (260.0, 20.0)]);
     assert_eq!(opened.borrow().len(), 2, "a drag opens nothing");
     assert_eq!(board.items.peek()[0], vec!['b', 'c', 'a']);
+}
+
+const MANY: usize = 3000;
+const VIEW: f32 = 400.0;
+const ABOVE: f32 = 100.0;
+
+type KeyedDrops = Rc<RefCell<Vec<(u32, DropPlace<Slot>)>>>;
+
+struct VirtualBoard {
+    tree: ComponentList,
+    items: RwSignal<Vec<u32>>,
+    built: Rc<std::cell::Cell<usize>>,
+    drops: KeyedDrops,
+    viewport: ScrollViewport,
+}
+
+/// Whether the item keyed `key` heads the items after it: every tenth, which a drop lands before, after or onto, and which is never picked up itself.
+fn heads(key: u32) -> bool {
+    key.is_multiple_of(10)
+}
+
+/// A block `ABOVE` px tall over a virtual zone of `MANY` 40px items keyed by their first place, in a scroll `VIEW` px tall.
+fn virtual_board() -> VirtualBoard {
+    fresh_layout_runtime();
+    telar::focus::clear();
+    telar::set_surface_size(telar::Size::new(400.0, VIEW + 100.0));
+    let items = signal((0..MANY as u32).collect::<Vec<u32>>());
+    let drops: KeyedDrops = Rc::default();
+    let built = Rc::new(std::cell::Cell::new(0));
+    let session = DragSession::new();
+    let recorded = drops.clone();
+    let group = ReorderGroup::new(&session, move |slot: Slot| {
+        items
+            .with(|items| items.get(slot.index).copied())
+            .filter(|key| !heads(*key))
+    })
+    .drag_threshold(0.0)
+    .on_drop(move |key, place| {
+        recorded.borrow_mut().push((key, place));
+        if let DropPlace::Between(to) = place {
+            let mut now = items.peek();
+            if let Some(from) = now.iter().position(|at| *at == key) {
+                telar::apply_move(&mut now, from, to.index);
+                items.set(now);
+            }
+        }
+    });
+    let mut handed = None;
+    let counted = built.clone();
+    let scroll =
+        LayoutScrollArea::new_with(LayoutStyle::new().width(ITEM).height(VIEW), |viewport| {
+            handed = Some(viewport.clone());
+            let block = StyledContainer::new(
+                LayoutStyle::new()
+                    .width(ITEM)
+                    .height(ABOVE)
+                    .flex_shrink(0.0),
+                |_| RectStyle::default(),
+                vec![],
+            )?;
+            let zone = group.virtual_zone(
+                VirtualZoneProps::props()
+                    .items(items)
+                    .item(Rc::new(move |_, _| {
+                        counted.set(counted.get() + 1);
+                        pill()
+                    }))
+                    .rows(VirtualRows::new(viewport, ROW))
+                    .build(),
+            )?;
+            Ok(box_item(Container::new(
+                LayoutStyle::new().flex_column(),
+                vec![box_item(block), zone],
+            )?))
+        })
+        .unwrap();
+    let column = Container::new(
+        LayoutStyle::new().flex_column().width(400.0),
+        vec![box_item(scroll)],
+    )
+    .unwrap();
+    let node = column.layout_node();
+    let tree = ComponentList::new(box_item(column));
+    lay_out(node, 400.0, VIEW + 100.0);
+    let board = VirtualBoard {
+        tree,
+        items,
+        built,
+        drops,
+        viewport: handed.expect("the content was built"),
+    };
+    board.settle();
+    board
+}
+
+impl VirtualBoard {
+    fn settle(&self) {
+        for _ in 0..8 {
+            telar::relayout_if_dirty();
+            let _ = self.tree.commands();
+        }
+    }
+
+    fn event(&mut self, event: telar::Event) {
+        route(&mut self.tree, &event);
+        self.settle();
+    }
+
+    fn step(&mut self, key: NamedKey) {
+        self.event(key_with(Key::Named(key), alt()));
+        hold(false, false);
+    }
+
+    /// Where the item at `index` is drawn on the surface, while it is built.
+    fn drawn(&self, index: usize) -> Option<telar::Rect> {
+        self.items_read()
+            .into_iter()
+            .find(|node| node.position.map(|at| at.position.get() as usize) == Some(index + 1))
+            .map(|node| node.rect)
+    }
+
+    fn items_read(&self) -> Vec<telar::AccessNode> {
+        telar::inspect::snapshot(&self.tree.commands())
+            .into_iter()
+            .filter(|node| node.role == Role::ListItem)
+            .collect()
+    }
+}
+
+#[test]
+fn a_virtual_zone_of_thousands_of_items_builds_only_those_its_scroll_shows() {
+    let board = virtual_board();
+    let read = board.items_read();
+    let screenful = ((VIEW + 2.0 * 200.0) / ROW) as usize + 2;
+    assert!(
+        !read.is_empty() && read.len() <= screenful,
+        "{} of {MANY} items are read",
+        read.len()
+    );
+    assert!(
+        board.built.get() <= screenful,
+        "{} of {MANY} items were built",
+        board.built.get()
+    );
+    let size = read[0]
+        .position
+        .expect("a built item says where it stands")
+        .size;
+    assert_eq!(size.get() as usize, MANY, "each item counts all of them");
+}
+
+#[test]
+fn an_item_carried_past_the_items_built_at_the_press_lands_where_it_is_let_go() {
+    let mut board = virtual_board();
+    let start = board.drawn(1).expect("the second item is built");
+    let (x, y) = telar::testing::centre(start);
+    board.event(press(x, y));
+    board.event(moved(x, y + 100.0));
+    board.event(moved(x, f64::from(VIEW) - 5.0));
+    for _ in 0..40 {
+        advance_time(Duration::from_millis(50));
+        board.settle();
+    }
+    assert!(
+        board.viewport.peek_offset().1 > 1000.0,
+        "the zone scrolled far past the item picked up"
+    );
+    assert!(
+        board.drawn(1).is_none(),
+        "the item picked up is no longer built"
+    );
+    board.event(release(x, f64::from(VIEW) - 5.0));
+    let drops = board.drops.borrow().clone();
+    assert_eq!(drops.len(), 1, "{drops:?}");
+    let (key, place) = drops[0];
+    assert_eq!(key, 1);
+    let DropPlace::Between(to) = place else {
+        panic!("dropped between two items: {place:?}");
+    };
+    assert!(
+        to.index > 30,
+        "it lands past the items built at the press: {to:?}"
+    );
+    assert_eq!(board.items.peek()[to.index - 1], 1);
+}
+
+#[test]
+fn alt_down_steps_an_item_past_the_bottom_of_the_view_and_the_view_follows_it() {
+    let mut board = virtual_board();
+    let start = board.drawn(1).expect("the second item is built");
+    let (x, y) = telar::testing::centre(start);
+    board.event(press(x, y));
+    board.event(release(x, y));
+    for _ in 0..30 {
+        board.step(NamedKey::ArrowDown);
+    }
+    let at = board
+        .items
+        .peek()
+        .iter()
+        .position(|key| *key == 1)
+        .expect("the item is still there");
+    assert!(at > 20, "it stepped down past the view: now at {at}");
+    assert!(board.viewport.peek_offset().1 > 0.0, "the view followed it");
+    let focused = board
+        .items_read()
+        .into_iter()
+        .find(|node| node.focused)
+        .expect("the item kept the keyboard");
+    assert_eq!(
+        focused.position.map(|place| place.position.get() as usize),
+        Some(at + 1)
+    );
+    assert!(
+        focused.rect.y >= 0.0 && focused.rect.y + focused.rect.height <= VIEW + 0.5,
+        "it is in view: {:?}",
+        focused.rect
+    );
+}
+
+#[test]
+fn an_item_with_no_payload_stays_where_it_is() {
+    let mut board = virtual_board();
+    let heading = board.drawn(10).expect("the second heading is built");
+    let (x, y) = telar::testing::centre(heading);
+    board.event(press(x, y));
+    board.event(moved(x, y + 120.0));
+    board.event(release(x, y + 120.0));
+    board.step(NamedKey::ArrowDown);
+    assert!(board.drops.borrow().is_empty());
+    assert_eq!(board.items.peek()[10], 10);
 }

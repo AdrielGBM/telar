@@ -91,10 +91,16 @@ impl VirtualList {
         K: Fn(&Item) -> Key + 'static,
         B: Fn(usize, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        let slots = fixed_slots(viewport, row_height, overscan, source, move |_, item| {
-            hash_key(&key(item))
-        });
-        by_value(container_style, slots, None, build)
+        let origin = signal(0.0);
+        let slots = fixed_slots(
+            viewport,
+            origin,
+            row_height,
+            overscan,
+            source,
+            move |_, item| hash_key(&key(item)),
+        );
+        by_value(container_style, slots, origin, None, build)
     }
 
     /// [`new`](Self::new) without a key: each row is keyed on its index, and `build` receives a handle on the item now at that index rather than a copy, so the row follows whatever moves into its place.
@@ -111,8 +117,11 @@ impl VirtualList {
         S: Fn() -> Vec<Item> + 'static,
         B: Fn(usize, ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        let slots = fixed_slots(viewport, row_height, overscan, source, |at, _| at as u64);
-        by_handle(container_style, slots, None, build)
+        let origin = signal(0.0);
+        let slots = fixed_slots(viewport, origin, row_height, overscan, source, |at, _| {
+            at as u64
+        });
+        by_handle(container_style, slots, origin, None, build)
     }
 
     /// A list whose rows may each be a different height, building the rows on screen and `overscan` px more beyond each edge.
@@ -140,7 +149,7 @@ impl VirtualList {
         let slots = measured_slots(&rows.0, overscan, source, move |_, item| {
             hash_key(&key(item))
         });
-        by_value(container_style, slots, Some(rows.0), build)
+        by_value(container_style, slots, rows.0.origin, Some(rows.0), build)
     }
 
     /// [`measured`](Self::measured) without a key: each row is keyed on its index, and `build` receives a handle on the item now at that index rather than a copy. Heights are remembered by index too, and a row whose new item lays out taller or shorter is measured again.
@@ -157,13 +166,14 @@ impl VirtualList {
         B: Fn(usize, ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
         let slots = measured_slots(&rows.0, overscan, source, |at, _| at as u64);
-        by_handle(container_style, slots, Some(rows.0), build)
+        by_handle(container_style, slots, rows.0.origin, Some(rows.0), build)
     }
 }
 
 /// The window of a list whose every row is `row_height` tall, between the spacers standing for the rows outside it.
 fn fixed_slots<Item: VirtualItem>(
     viewport: ScrollViewport,
+    origin: RwSignal<f32>,
     row_height: f32,
     overscan: usize,
     source: impl Fn() -> Vec<Item> + 'static,
@@ -173,7 +183,7 @@ fn fixed_slots<Item: VirtualItem>(
     let (_, offset_y) = viewport.offset();
     let rect = viewport.rect();
     move || {
-        let offset = offset_y.get();
+        let offset = offset_y.get() - origin.get();
         let viewport_height = laid_out_or_surface(rect.get().height);
         items.with(|items| {
             let count = items.len();
@@ -227,7 +237,7 @@ fn measured_slots<Item: VirtualItem>(
     let rows = Rc::clone(rows);
     move || {
         rows.revision.get();
-        let offset = offset_y.get();
+        let offset = offset_y.get() - (rows.origin.get() - rows.header.get()).max(0.0);
         let viewport_height = laid_out_or_surface(rect.get().height);
         items.with(|items| {
             let heights = rows.heights.borrow();
@@ -263,12 +273,14 @@ fn measured_slots<Item: VirtualItem>(
 fn by_value<Item: VirtualItem>(
     container_style: LayoutStyle,
     slots: impl Fn() -> Vec<Slot<Item>> + 'static,
+    origin: RwSignal<f32>,
     measured: Option<Rc<Rows>>,
     build: impl Fn(usize, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 ) -> Result<ReactiveList, LayoutError> {
     reconciled(
         container_style,
         slots,
+        origin,
         measured,
         move |at, item, _| build(at, item),
         |_, _| {},
@@ -279,6 +291,7 @@ fn by_value<Item: VirtualItem>(
 fn by_handle<Item: VirtualItem>(
     container_style: LayoutStyle,
     slots: impl Fn() -> Vec<Slot<Item>> + 'static,
+    origin: RwSignal<f32>,
     measured: Option<Rc<Rows>>,
     build: impl Fn(usize, ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 ) -> Result<ReactiveList, LayoutError> {
@@ -287,6 +300,7 @@ fn by_handle<Item: VirtualItem>(
     reconciled(
         container_style,
         slots,
+        origin,
         measured,
         move |at, item, k| build(at, held.hold(item, k)),
         move |item, k| values.sync(item, k),
@@ -296,11 +310,12 @@ fn by_handle<Item: VirtualItem>(
 fn reconciled<Item: VirtualItem>(
     container_style: LayoutStyle,
     slots: impl Fn() -> Vec<Slot<Item>> + 'static,
+    origin: RwSignal<f32>,
     measured: Option<Rc<Rows>>,
     build: impl Fn(usize, Item, u64) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     sync: impl Fn(&Item, u64) + 'static,
 ) -> Result<ReactiveList, LayoutError> {
-    ReactiveList::build_with_sync(
+    let list = ReactiveList::build_with_sync(
         container_style,
         slots,
         move |slot, k| match slot {
@@ -319,7 +334,22 @@ fn reconciled<Item: VirtualItem>(
                 sync(item, k);
             }
         },
-    )
+    )?;
+    follow_origin(origin, list.layout_node());
+    Ok(list)
+}
+
+/// Keeps `origin` at where the list `node` starts in the scroll's content: a list drawn below a heading or anything else in the same scroll finds the rows on screen from its own top, not from the content's.
+fn follow_origin(origin: RwSignal<f32>, node: NodeId) {
+    let Some(rect) = track_layout(node) else {
+        return;
+    };
+    effect(move || {
+        let top = rect.get().y;
+        if origin.peek() != top {
+            origin.set(top);
+        }
+    });
 }
 
 /// What a row or a spacer is reconciled under. A spacer keys on its height, so a scroll that changes it rebuilds the spacer; a row keys on its index as well as its key, because the same item at a new index sits at a new height.
@@ -383,6 +413,8 @@ pub struct VirtualRows(Rc<Rows>);
 
 struct Rows {
     viewport: ScrollViewport,
+    /// Where the list starts in the scroll's content, once laid out: everything a row is placed at is counted from it.
+    origin: RwSignal<f32>,
     seed: f32,
     estimate: Cell<f32>,
     header: Cell<f32>,
@@ -405,6 +437,7 @@ impl VirtualRows {
     pub fn new(viewport: ScrollViewport, estimate: f32) -> Self {
         Self(Rc::new(Rows {
             viewport,
+            origin: signal(0.0),
             seed: estimate.max(0.0),
             estimate: Cell::new(estimate.max(0.0)),
             header: Cell::new(0.0),
@@ -419,7 +452,7 @@ impl VirtualRows {
         }))
     }
 
-    /// Rows that stand under a header `height` px tall at the top of the scroll's content, held at the top of the view while they scroll under it: a table's column headings. Where a row stands counts the header, and the rows on screen and a row brought into view are the ones it leaves uncovered.
+    /// Rows that scroll under a header `height` px tall held at the top of the view: a table's column headings. A row brought into view is brought below it; where a row stands is counted from the list's own top, as for any list, the header drawn above the list included.
     pub fn under_header(self, height: f32) -> Self {
         self.0.header.set(height.max(0.0));
         self
@@ -437,7 +470,7 @@ impl VirtualRows {
 
     /// Where row `index` starts in the scroll's content.
     pub fn offset_of(&self, index: usize) -> f32 {
-        self.0.header.get() + self.0.heights.borrow().offset_of(index)
+        self.0.top() + self.0.heights.borrow().offset_of(index)
     }
 
     /// How tall row `index` is: measured once it has been built, the current estimate before.
@@ -445,9 +478,20 @@ impl VirtualRows {
         self.0.heights.borrow().height(index)
     }
 
-    /// The row standing at `offset` in the scroll's content, the first row for an offset in the header.
+    /// The row standing at `offset` in the scroll's content, the first row for an offset in the header or above the list.
     pub fn row_at(&self, offset: f32) -> usize {
-        self.0.heights.borrow().row_at(offset - self.0.header.get())
+        self.0.heights.borrow().row_at(offset - self.0.top())
+    }
+
+    /// Where every row starts in the scroll's content and how tall it is, built or not, read reactively: the caller runs again whenever a row is measured, the estimate moves or the list itself moves in the content. What a widget placing every row of a long list needs, a drop target among them among others.
+    pub fn spans(&self) -> Vec<(f32, f32)> {
+        let rows = &self.0;
+        rows.revision.get();
+        let top = rows.origin.get().max(rows.header.get());
+        let heights = rows.heights.borrow();
+        (0..heights.len())
+            .map(|index| (top + heights.offset_of(index), heights.height(index)))
+            .collect()
     }
 
     /// The height of every row together: the content the scroll scrolls, less the header.
@@ -478,6 +522,16 @@ impl VirtualRows {
 }
 
 impl Rows {
+    /// Where the first row starts in the scroll's content: the list's own top, below whatever the content draws above it, a header included, and below the header until the list is laid out.
+    fn top(&self) -> f32 {
+        self.origin.peek().max(self.header.get())
+    }
+
+    /// Where, among the rows, the view scrolled to `y` starts showing them: below the header held over its top, counted from the list's own top. Until the list is laid out its top is taken to be the header's bottom, where a list under a header stands.
+    fn uncovered(&self, y: f32) -> f32 {
+        y - (self.origin.peek() - self.header.get()).max(0.0)
+    }
+
     fn is_measured(&self, index: usize) -> bool {
         let keys = self.keys.borrow();
         keys.get(index)
@@ -584,7 +638,7 @@ impl Rows {
         let (x, y) = self.viewport.peek_offset();
         let (delta, anchor) = {
             let mut heights = self.heights.borrow_mut();
-            let anchor = heights.row_at(y);
+            let anchor = heights.row_at(self.uncovered(y));
             (heights.set(at, height), anchor)
         };
         if delta != 0.0 {
@@ -623,7 +677,7 @@ impl Rows {
         let (x, y) = self.viewport.peek_offset();
         let (anchor, before) = {
             let heights = self.heights.borrow();
-            let anchor = heights.row_at(y);
+            let anchor = heights.row_at(self.uncovered(y));
             (anchor, heights.offset_of(anchor))
         };
         let after = {
@@ -670,7 +724,10 @@ impl Rows {
         }
         let (top, height) = {
             let heights = self.heights.borrow();
-            (heights.offset_of(index), heights.height(index))
+            (
+                self.top() + heights.offset_of(index) - self.header.get(),
+                heights.height(index),
+            )
         };
         let (x, y) = self.viewport.peek_offset();
         if let Some(furthest) = self.viewport.max_offset_y()

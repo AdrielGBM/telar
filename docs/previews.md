@@ -275,13 +275,17 @@ Each preview and cell is checked for what would keep someone from using it, by r
 `focus-indicator` (errors), and `target-size`, `focus-order`, `missing-lang` (warnings). An unnamed widget is a list
 box, tree, grid, tab list, radio group, dialog or progress bar with no name: give it one with `a11y_label:` or the
 component's `label`. Boundary contrast holds a field, box to tick, switch, slider or select to 3:1 against what it is
-drawn on, by its own fill or edge or by the frame drawn round it. For the focus indicator each Tab stop is brought into
-view in every scroll it sits in, then given focus, and the canvas compared with the same view with nothing focused, so
-a control far down a long page is judged as it is drawn on screen: the ring has to stand 3:1 from the control's fill
-and from what is around it, in one of its two bands; a list or menu is judged by the cursor on its current item. Focus goes back
-where it was once the check is done. The workshop's Accessibility panel shows the findings of the canvas on screen,
-and `expect_accessible()` in a play asserts there are none. A canvas with no `locale` of its own is in the language
-the app's setup chose, or else its catalog's default, in the workshop and in `cargo telar test` alike.
+drawn on, by its own fill or edge or by the frame drawn round it. For the focus indicator each Tab stop is given focus
+in turn, which brings it into view in every scroll it sits in as Tab does, and the canvas around it compared with the
+same view with nothing focused, so a control far down a long page is judged as it is drawn on screen: the ring has to
+stand 3:1 from the control's fill and from what is around it, in one of its two bands; a list or menu is judged by the
+cursor on its current item. Each stop reads only its own neighbourhood of the two frames, and what a reader is told
+about the canvas is read once for the walk rather than once a stop, so the check of a long page grows with the number
+of its stops times the frame it draws, not with the square of the page: a page that builds only the rows its scroll
+shows ([virtual zones](drag-session.md#a-long-list), `for … virtual`) is checked in what a screenful costs. Focus goes
+back where it was once the check is done. The workshop's Accessibility panel shows the findings of the canvas on
+screen, and `expect_accessible()` in a play asserts there are none. A canvas with no `locale` of its own is in the
+language the app's setup chose, or else its catalog's default, in the workshop and in `cargo telar test` alike.
 
 A preview that breaks a rule on purpose, such as a dense layout with small targets, says so, and the checks leave
 that rule out: `.a11y_ignore(&[Rule::TargetSize])` in Rust.

@@ -1,7 +1,8 @@
 //! Accessibility checks over what a canvas drew and what a reader is told about it.
 //!
-//! [`check`] reads a [`Frame`] beside the accessibility snapshot of the same moment and reports what would stop someone using the canvas with a screen reader, a keyboard, low vision or an imprecise pointer; [`check_focus`] reads the frames the canvas draws as the keyboard reaches each of its stops. Each finding names its [`Rule`] and carries the rule's [`Severity`]; a preview that knowingly breaks a rule says so with its `a11y_ignore`, and [`Report::ignoring`] drops those.
+//! [`check`] reads a [`Frame`] beside the accessibility snapshot of the same moment and reports what would stop someone using the canvas with a screen reader, a keyboard, low vision or an imprecise pointer; [`check_focus`] reads the canvas around one of its stops as the keyboard reaches it and as it was without the keyboard. Each finding names its [`Rule`] and carries the rule's [`Severity`]; a preview that knowingly breaks a rule says so with its `a11y_ignore`, and [`Report::ignoring`] drops those.
 
+use geometry_core::Bands;
 use renderer_core::{FillRule, LayerMask, PathData};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -139,138 +140,185 @@ pub(crate) fn check_over(
     Report { violations }
 }
 
-/// A Tab stop as the keyboard reaches it: what a reader is told about it then, the frame the canvas draws while it holds focus, and the same canvas with nothing focused, scrolled as it is while the stop holds focus.
+/// A Tab stop as the keyboard reaches it: what a reader is told about it then, the item its cursor rests on, and the canvas around it with the keyboard on it and with the keyboard gone, at the same scroll.
 #[derive(Clone, Debug)]
 pub struct FocusedStop {
     /// The stop as a reader is told about it while it holds focus.
     pub node: AccessNode,
-    /// The canvas while the stop holds focus, with the stop brought into view in every scroll it sits in.
-    pub frame: Frame,
-    /// The canvas as [`frame`](Self::frame) draws it with nothing focused: what focus changed is judged against it.
-    pub rest: Frame,
+    /// The item the stop's cursor rests on while it holds focus, as a menu's or a tree's does; `None` for a stop that keeps no cursor.
+    pub cursor: Option<AccessNode>,
+    /// The canvas while the stop holds focus.
+    pub focused: Frame,
+    /// The canvas with nothing focused, scrolled as it is while the stop holds focus.
+    pub unfocused: Frame,
 }
 
-/// Checks that each of `focused` shows where the keyboard is, against its [`rest`](FocusedStop::rest).
+/// How far around a stop's box its frames are read: room for a ring drawn outside the box and the colour just outside the ring.
+const AROUND_STOP: f32 = 48.0;
+
+/// Checks that `stop` shows where the keyboard is.
 ///
 /// What the keyboard reaching a stop changes inside its box is its focus indicator. A ring is judged as the keyboard's ring is drawn, in two bands so that one of them always shows: the better band has to stand the [`ContrastUse::ControlBoundary`] minimum from the stop's fill and from what is around the ring. An indicator drawn as a change of fill alone has to stand as far from what was there before. A stop whose box looks the same focused or not shows nothing at all.
 ///
-/// Each stop is judged in view, whatever was on screen before the keyboard reached it, so a control far down a long page is judged by the ring it wears there and not by a clip or a page that draws only what is on screen.
+/// A stop whose cursor rests on one of its items shows the keyboard on that item: what is judged is what focus changes there.
 ///
-/// A stop whose cursor rests on one of its items, as a menu's or a tree's does, shows the keyboard on that item: what is judged is what focus changes there.
-pub fn check_focus(focused: &[FocusedStop]) -> Report {
-    let violations = focused
-        .iter()
-        .filter_map(|stop| focus_indicator(&Walk::of(&stop.rest), stop.rest.background, stop))
-        .collect();
-    Report { violations }
+/// Only the part of the two frames around the stop is read, so checking every stop of a long canvas costs each stop its own neighbourhood rather than the whole canvas.
+pub fn check_focus(stop: &FocusedStop) -> Report {
+    let area = stop
+        .cursor
+        .as_ref()
+        .map_or(stop.node.rect, |item| item.rect);
+    let mut region = grow(area, AROUND_STOP);
+    loop {
+        let read = FocusRead {
+            before: Walk::around(&stop.unfocused, region),
+            after: Walk::around(&stop.focused, region),
+        };
+        match read.indicator(stop, area) {
+            Judged::Reached(violation) => {
+                return Report {
+                    violations: violation.into_iter().collect(),
+                };
+            }
+            Judged::Wider(ring) => region = grow(ring, AROUND_STOP),
+        }
+    }
 }
 
-fn focus_indicator(
-    before: &Walk,
-    background: Option<Color>,
-    stop: &FocusedStop,
-) -> Option<Violation> {
-    let walk = Walk::of(&stop.frame);
-    let background = stop.frame.background.or(background);
-    let pointed = stop.node.active_descendant.and_then(|item| {
-        stop.frame
-            .access
-            .as_deref()?
-            .snapshot
+/// The two frames of a stop, read around it.
+struct FocusRead {
+    before: Walk,
+    after: Walk,
+}
+
+/// What reading a stop's neighbourhood found: a verdict, or a ring reaching past what was read, to be read again around it.
+enum Judged {
+    Reached(Option<Violation>),
+    Wider(Rect),
+}
+
+impl FocusRead {
+    fn indicator(&self, stop: &FocusedStop, area: Rect) -> Judged {
+        let (before, walk) = (&self.before, &self.after);
+        let background = stop.focused.background.or(stop.unfocused.background);
+        let seen: HashSet<ShapeKey> = before.shapes.iter().map(Shape::key).collect();
+        let changed: Vec<&Shape> = walk
+            .shapes
             .iter()
-            .find(|node| node.id == Some(item))
-    });
-    let area = pointed.map_or(stop.node.rect, |item| item.rect);
-    let changed: Vec<&Shape> = walk
-        .shapes
-        .iter()
-        .filter(|shape| shape.rect.overlaps(area))
-        .filter(|shape| !before.shapes.iter().any(|old| old.looks_like(shape)))
-        .collect();
-    let needed = ContrastUse::ControlBoundary.minimum(ContrastLevel::Standard);
-    let violation =
-        |message: String| Some(Violation::new(Rule::FocusIndicator, message, Some(area)));
-    if changed.is_empty() {
-        return violation(match pointed {
-            Some(item) => format!(
-                "nothing marks {}, which the cursor of {} rests on",
-                describe(item),
-                describe(&stop.node)
-            ),
-            None => format!(
-                "{} looks the same with the keyboard on it: nothing shows where focus is",
-                describe(&stop.node)
-            ),
-        });
-    }
-    let bands: Vec<(&Shape, Color)> = changed
-        .iter()
-        .filter_map(|shape| match shape.edge_ink() {
-            Some(Ink::Solid(color)) => Some((*shape, color)),
-            _ => None,
-        })
-        .collect();
-    if bands.is_empty() {
-        let best = changed
-            .iter()
-            .filter(|shape| matches!(shape.fill, Some(Ink::Solid(_))))
-            .filter_map(|shape| {
-                let (x, y) = centre(shape.rect);
-                let now = walk.backdrop(x, y, shape.upto, background)?;
-                let was = before.backdrop(x, y, before.fills.len(), background)?;
-                Some(now.contrast_ratio(was))
-            })
-            .fold(None, |best: Option<f32>, ratio| {
-                Some(best.map_or(ratio, |best| best.max(ratio)))
-            })?;
-        return (best + 0.005 < needed).then(|| {
-            Violation::new(
+            .filter(|shape| shape.rect.overlaps(area))
+            .filter(|shape| !seen.contains(&shape.key()))
+            .collect();
+        let needed = ContrastUse::ControlBoundary.minimum(ContrastLevel::Standard);
+        let violation = |message: String| {
+            Judged::Reached(Some(Violation::new(
                 Rule::FocusIndicator,
-                format!(
-                    "{} shows focus only by a change of fill {best:.2}:1 from what was there; it needs {needed}:1",
+                message,
+                Some(area),
+            )))
+        };
+        if changed.is_empty() {
+            return violation(match &stop.cursor {
+                Some(item) => format!(
+                    "nothing marks {}, which the cursor of {} rests on",
+                    describe(item),
                     describe(&stop.node)
                 ),
-                Some(area),
-            )
-        });
-    }
-    let ring = bands
-        .iter()
-        .map(|(shape, _)| shape.rect)
-        .reduce(Rect::union)
-        .unwrap_or(area);
-    let under = bands
-        .iter()
-        .map(|(shape, _)| shape.under)
-        .min()
-        .unwrap_or(0);
-    let upto = bands.iter().map(|(shape, _)| shape.upto).max().unwrap_or(0);
-    let (x, y) = centre(area);
-    let fill = walk.backdrop(x, y, upto, background);
-    let (rx, ry) = centre(ring);
-    let around = [
-        (ring.x - AROUND, ry),
-        (ring.x + ring.width + AROUND, ry),
-        (rx, ring.y - AROUND),
-        (rx, ring.y + ring.height + AROUND),
-    ]
-    .map(|(x, y)| walk.backdrop(x, y, under, background));
-    let better_band = |against: Color| {
-        bands
+                None => format!(
+                    "{} looks the same with the keyboard on it: nothing shows where focus is",
+                    describe(&stop.node)
+                ),
+            });
+        }
+        let bands: Vec<(&Shape, Color)> = changed
             .iter()
-            .map(|(_, band)| band.over(against).contrast_ratio(against))
-            .fold(0.0f32, f32::max)
-    };
-    let short = std::iter::once(("its fill", fill))
-        .chain(around.map(|colour| ("what is around it", colour)))
-        .filter_map(|(what, against)| against.map(|against| (what, better_band(against))))
-        .filter(|(_, ratio)| ratio + 0.005 < needed)
-        .min_by(|(_, a), (_, b)| a.total_cmp(b));
-    let (what, ratio) = short?;
-    violation(format!(
-        "the ring {} wears with the keyboard on it is {ratio:.2}:1 against {what} at best; it needs {needed}:1",
-        describe(&stop.node)
-    ))
+            .filter_map(|shape| match shape.edge_ink() {
+                Some(Ink::Solid(color)) => Some((*shape, color)),
+                _ => None,
+            })
+            .collect();
+        if bands.is_empty() {
+            let best = changed
+                .iter()
+                .filter(|shape| matches!(shape.fill, Some(Ink::Solid(_))))
+                .filter_map(|shape| {
+                    let (x, y) = centre(shape.rect);
+                    let now = walk.backdrop(x, y, shape.upto, background)?;
+                    let was = before.backdrop(x, y, before.fills.len(), background)?;
+                    Some(now.contrast_ratio(was))
+                })
+                .fold(None, |best: Option<f32>, ratio| {
+                    Some(best.map_or(ratio, |best| best.max(ratio)))
+                });
+            let Some(best) = best else {
+                return Judged::Reached(None);
+            };
+            return Judged::Reached((best + 0.005 < needed).then(|| {
+                Violation::new(
+                    Rule::FocusIndicator,
+                    format!(
+                        "{} shows focus only by a change of fill {best:.2}:1 from what was there; it needs {needed}:1",
+                        describe(&stop.node)
+                    ),
+                    Some(area),
+                )
+            }));
+        }
+        let ring = bands
+            .iter()
+            .map(|(shape, _)| shape.rect)
+            .reduce(Rect::union)
+            .unwrap_or(area);
+        if walk
+            .region
+            .is_some_and(|region| !within(grow(ring, AROUND + EPSILON), region))
+        {
+            return Judged::Wider(ring);
+        }
+        let under = bands
+            .iter()
+            .map(|(shape, _)| shape.under)
+            .min()
+            .unwrap_or(0);
+        let upto = bands.iter().map(|(shape, _)| shape.upto).max().unwrap_or(0);
+        let (x, y) = centre(area);
+        let fill = walk.backdrop(x, y, upto, background);
+        let (rx, ry) = centre(ring);
+        let around = [
+            (ring.x - AROUND, ry),
+            (ring.x + ring.width + AROUND, ry),
+            (rx, ring.y - AROUND),
+            (rx, ring.y + ring.height + AROUND),
+        ]
+        .map(|(x, y)| walk.backdrop(x, y, under, background));
+        let better_band = |against: Color| {
+            bands
+                .iter()
+                .map(|(_, band)| band.over(against).contrast_ratio(against))
+                .fold(0.0f32, f32::max)
+        };
+        let short = std::iter::once(("its fill", fill))
+            .chain(around.map(|colour| ("what is around it", colour)))
+            .filter_map(|(what, against)| against.map(|against| (what, better_band(against))))
+            .filter(|(_, ratio)| ratio + 0.005 < needed)
+            .min_by(|(_, a), (_, b)| a.total_cmp(b));
+        let Some((what, ratio)) = short else {
+            return Judged::Reached(None);
+        };
+        violation(format!(
+            "the ring {} wears with the keyboard on it is {ratio:.2}:1 against {what} at best; it needs {needed}:1",
+            describe(&stop.node)
+        ))
+    }
+}
+
+/// `rect` grown by `by` on every side.
+fn grow(rect: Rect, by: f32) -> Rect {
+    Rect::new(
+        rect.x - by,
+        rect.y - by,
+        rect.width + 2.0 * by,
+        rect.height + 2.0 * by,
+    )
 }
 
 fn unnamed_controls(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
@@ -393,10 +441,15 @@ fn contrast(
         .filter(|node| node.id.is_some() && !node.enabled)
         .map(|node| node.rect)
         .collect();
+    let disabled_bands = Bands::new(disabled.iter().copied());
     for run in &walk.text {
         let Some(ink) = run.color else { continue };
         let (x, y) = centre(run.rect);
-        if disabled.iter().any(|rect| rect.contains(x, y)) {
+        if disabled_bands
+            .at(y)
+            .into_iter()
+            .any(|i| disabled[i].contains(x, y))
+        {
             continue;
         }
         let Some(backdrop) = walk.backdrop(x, y, run.over, behind(x, y)) else {
@@ -480,15 +533,19 @@ fn boundary_contrast(
 /// What draws the edges of a control at `rect`: the shapes inside it, or, where it draws none of its own, the innermost shape around it, as a field's frame is drawn round the line it types into.
 fn edges_of(walk: &Walk, rect: Rect) -> Vec<&Shape> {
     let inside: Vec<&Shape> = walk
-        .shapes
-        .iter()
+        .shape_bands
+        .crossing(rect.y - EPSILON, rect.y + rect.height + EPSILON)
+        .into_iter()
+        .map(|i| &walk.shapes[i])
         .filter(|shape| within(shape.rect, rect))
         .collect();
     if !inside.is_empty() {
         return inside;
     }
-    walk.shapes
-        .iter()
+    walk.shape_bands
+        .crossing(rect.y, rect.y + rect.height)
+        .into_iter()
+        .map(|i| &walk.shapes[i])
         .filter(|shape| within(rect, shape.rect))
         .min_by(|a, b| area(a.rect).total_cmp(&area(b.rect)))
         .into_iter()
@@ -507,16 +564,18 @@ fn target_sizes(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
     let small =
         |rect: Rect| rect.width + EPSILON < MIN_TARGET || rect.height + EPSILON < MIN_TARGET;
     let radius = MIN_TARGET / 2.0;
+    let bands = Bands::new(targets.iter().map(|target| target.rect));
     for (index, target) in targets.iter().enumerate() {
         if !small(target.rect) {
             continue;
         }
         let (x, y) = centre(target.rect);
-        let crowded = targets
-            .iter()
-            .enumerate()
-            .filter(|(other, _)| *other != index)
-            .any(|(_, other)| {
+        let crowded = bands
+            .crossing(y - MIN_TARGET - EPSILON, y + MIN_TARGET + EPSILON)
+            .into_iter()
+            .filter(|other| *other != index)
+            .map(|other| targets[other])
+            .any(|other| {
                 let (ox, oy) = centre(other.rect);
                 distance_to_rect(x, y, other.rect) + EPSILON < radius
                     || (small(other.rect) && (x - ox).hypot(y - oy) + EPSILON < MIN_TARGET)
@@ -651,10 +710,14 @@ impl Painted {
 }
 
 /// The frame as the checks read it: what is painted where, the shapes that paint it, which text sits on what, the pictures, and where each box is placed.
-#[derive(Default)]
 struct Walk {
+    /// The part of the frame read, everything painted outside it left out; `None` for the whole frame.
+    region: Option<Rect>,
     fills: Vec<Fill>,
+    /// The fills by the bands of the frame they cross, for finding what is painted under a point.
+    fill_bands: Bands,
     shapes: Vec<Shape>,
+    shape_bands: Bands,
     text: Vec<Run>,
     art: Vec<Art>,
     boxes: HashMap<NodeId, Rect>,
@@ -681,6 +744,12 @@ enum Fill {
 }
 
 impl Fill {
+    fn rect(&self) -> Rect {
+        match self {
+            Fill::Solid { rect, .. } | Fill::Path { rect, .. } | Fill::Unknown { rect } => *rect,
+        }
+    }
+
     /// What the fill paints at (`x`, `y`), or `None` where it paints nothing.
     fn at(&self, x: f32, y: f32) -> Option<Ink> {
         match self {
@@ -735,9 +804,53 @@ struct Edge {
     widths: [f32; 4],
 }
 
+/// What a shape looks like, to tell by hashing whether a frame drew it already: its rect, its fill and its edge, bit for bit.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct ShapeKey {
+    rect: [u32; 4],
+    fill: [u32; 5],
+    edge: [u32; 9],
+}
+
+fn bits(value: f32) -> u32 {
+    // Adding zero makes a negative zero positive, so the two zeros that compare equal hash alike.
+    (value + 0.0).to_bits()
+}
+
+fn ink_bits(ink: Option<Ink>) -> [u32; 5] {
+    match ink {
+        None => [0; 5],
+        Some(Ink::Unknown) => [1, 0, 0, 0, 0],
+        Some(Ink::Solid(color)) => [
+            2,
+            bits(color.r),
+            bits(color.g),
+            bits(color.b),
+            bits(color.a),
+        ],
+    }
+}
+
 impl Shape {
-    fn looks_like(&self, other: &Shape) -> bool {
-        self.rect == other.rect && self.fill == other.fill && self.edge == other.edge
+    fn key(&self) -> ShapeKey {
+        let Rect {
+            x,
+            y,
+            width,
+            height,
+        } = self.rect;
+        let mut edge = [0; 9];
+        if let Some(Edge { ink, widths }) = self.edge {
+            edge[..5].copy_from_slice(&ink_bits(Some(ink)));
+            for (at, width) in edge[5..].iter_mut().zip(widths) {
+                *at = bits(width);
+            }
+        }
+        ShapeKey {
+            rect: [bits(x), bits(y), bits(width), bits(height)],
+            fill: ink_bits(self.fill),
+            edge,
+        }
     }
 
     fn edge_ink(&self) -> Option<Ink> {
@@ -769,7 +882,25 @@ struct Layer {
 
 impl Walk {
     fn of(frame: &Frame) -> Self {
-        let mut walk = Walk::default();
+        Self::reading(frame, None)
+    }
+
+    /// The part of `frame` that paints inside `region`.
+    fn around(frame: &Frame, region: Rect) -> Self {
+        Self::reading(frame, Some(region))
+    }
+
+    fn reading(frame: &Frame, region: Option<Rect>) -> Self {
+        let mut walk = Walk {
+            region,
+            fills: Vec::new(),
+            fill_bands: Bands::default(),
+            shapes: Vec::new(),
+            shape_bands: Bands::default(),
+            text: Vec::new(),
+            art: Vec::new(),
+            boxes: HashMap::new(),
+        };
         let unbounded = Rect::new(
             -f32::MAX / 4.0,
             -f32::MAX / 4.0,
@@ -808,6 +939,7 @@ impl Walk {
                 transform_clip_rect(matrix, rect)
                     .intersect(clip)
                     .filter(|_| !layer.hidden && layer.opacity > 0.0)
+                    .filter(|placed| region.is_none_or(|region| placed.overlaps(region)))
             };
             match command {
                 DrawCommand::PushElement { element } => {
@@ -918,6 +1050,8 @@ impl Walk {
                 _ => {}
             }
         });
+        walk.fill_bands = Bands::new(walk.fills.iter().map(Fill::rect));
+        walk.shape_bands = Bands::new(walk.shapes.iter().map(|shape| shape.rect));
         walk
     }
 
@@ -935,16 +1069,25 @@ impl Walk {
 
     /// Whether something whose colour is unknown is painted at (`x`, `y`) under the first `under` fills, rather than nothing at all.
     fn obscured(&self, x: f32, y: f32, under: usize) -> bool {
-        self.fills[..under]
-            .iter()
+        self.fills_under(y, under)
             .any(|fill| fill.at(x, y) == Some(Ink::Unknown))
+    }
+
+    /// The first `under` fills that may paint on the line at `y`, the last painted first.
+    fn fills_under(&self, y: f32, under: usize) -> impl Iterator<Item = &Fill> {
+        self.fill_bands
+            .at(y)
+            .into_iter()
+            .rev()
+            .filter(move |&i| i < under)
+            .map(|i| &self.fills[i])
     }
 
     /// The colour at (`x`, `y`) under the first `under` fills: the nearest opaque fill there, or `background` under everything, with the translucent fills between composited over it. `None` where something whose colour is unknown is in the way, or nothing is.
     fn backdrop(&self, x: f32, y: f32, under: usize, background: Option<Color>) -> Option<Color> {
         let mut between = Vec::new();
         let mut base = None;
-        for fill in self.fills[..under].iter().rev() {
+        for fill in self.fills_under(y, under) {
             match fill.at(x, y) {
                 None => {}
                 Some(Ink::Unknown) => return None,

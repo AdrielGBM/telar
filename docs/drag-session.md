@@ -169,6 +169,77 @@ it came out of is not reported. Held over a shut branch, the pointer opens it, a
 again under the pointer. A branch is any node built `with_children`, an empty list included, so an empty folder
 opens and is dropped into like any other.
 
+## A long list
+
+`ReorderGroup::zone` builds every item it holds. A list of thousands, such as the sentences of a long text, is
+one `virtual_zone` instead: it builds only the items its scroll shows, and a margin past each edge, and places
+the rest where its `VirtualRows` says they stand, so the page costs what a screenful does whatever its length.
+
+```rust
+use telar::{DragSession, DropPlace, LayoutScrollArea, LayoutStyle, VirtualRows, memo};
+use telar_components::{ReorderGroup, Slot, VirtualZoneProps};
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Line {
+    Heading(SectionId),
+    Sentence(SegmentId),
+}
+
+// The text as one list: each section's heading, then its sentences unless it is folded.
+let lines = memo(move || lines_of(&sections.get(), &folded.get()));
+let line_at = move |slot: Slot| lines.with(|lines| lines.get(slot.index).copied());
+
+let group = ReorderGroup::new(&session, move |slot| match line_at(slot) {
+    Some(Line::Sentence(id)) => Some(Carried::Segment(id)),
+    _ => None,
+})
+.accepts(move |_, place| match place {
+    DropPlace::Between(to) => to.index > 0,
+    DropPlace::Inside(onto) => matches!(line_at(onto), Some(Line::Heading(_))),
+})
+.on_drop(move |carried, place| move_to(carried, &lines.get(), place));
+
+let page = LayoutScrollArea::new_with(LayoutStyle::column().flex_grow(1.0), move |viewport| {
+    let zone = group.virtual_zone(
+        VirtualZoneProps::props()
+            .items(lines)
+            .item(Rc::new(move |_, line| match line {
+                Line::Heading(id) => section_heading(id),
+                Line::Sentence(id) => sentence_row(id),
+            }))
+            .rows(VirtualRows::new(viewport, 48.0))
+            .build(),
+    )?;
+    title_then(zone)
+})?;
+```
+
+The design is one flat list rather than a zone per section: a section's heading and its sentences are items of
+the same zone, told apart by the key the caller gives each. That is what lets one list build only what is on
+screen across every section, and it is all a sectioned list needs:
+
+- **Headings stay where they are.** The group's `payload` answers `None` for a heading, so the pointer does not
+  pick it up and Alt+↑ and Alt+↓ pass over it.
+- **Where a drop lands is the caller's to read.** A gap is counted in the list as it was shown when the item was
+  let go, and the line before it says where it goes: after a sentence, or first in the section whose heading it
+  follows. `accepts` refuses the gap before the first heading, and takes a sentence onto a heading, which is how a
+  sentence goes into a folded section.
+- **Folding is the list changing.** A folded section's sentences leave `items`, and come back when it opens; the
+  measured height of every item is remembered by its key, so the rows after a section that folds or opens stay
+  where they were measured.
+
+Every item is a drop target and a step of the keyboard whether it is built or not. An item carried out of the
+built window is still carried, and lands where it is let go: the group knows its own item by the press that
+picked it up, not by the box. Alt+↓ on the last item in view moves it one gap down and brings it into view, and
+focus follows it. Each built item says where it stands among all of them (`SetPosition`), so a reader counts the
+whole list, not the screenful. `on_activate`, `label`, `on_detach`, `accepts`, `reach` and drops from other widgets
+of the session work as they do on a zone that builds everything.
+
+The zone may sit below anything else in its scroll, a title and its buttons included: the rows are counted from
+the list's own top in the content. Items are stacked as they come, so the space between two sentences belongs
+inside what `item` builds. The `rows` handle is the zone's own, and brings any item into view by its place
+(`rows.reveal(index, margin)`), built or not.
+
 ## Scrolling near an edge
 
 While a payload is carried, a scroll area that holds one of the session's areas scrolls when the pointer is

@@ -1491,6 +1491,51 @@ fn no_snapshot_is_built_unless_the_overlay_asks() {
     );
 }
 
+/// An overlay that counts the component trees it is handed, asking for them only while `WANTS`.
+#[derive(Default)]
+struct Rooted<const WANTS: bool> {
+    trees: usize,
+}
+
+impl<const WANTS: bool> DevOverlay for Rooted<WANTS> {
+    fn on_frame<'a>(
+        &mut self,
+        base: &'a [renderer_core::DrawCommand],
+        _window_w: f32,
+        _window_h: f32,
+        _tree_dirty: bool,
+    ) -> std::borrow::Cow<'a, [renderer_core::DrawCommand]> {
+        std::borrow::Cow::Borrowed(base)
+    }
+
+    fn wants_tree(&self) -> bool {
+        WANTS
+    }
+
+    fn on_tree(&mut self, _nodes: &[crate::SegmentNodeInfo]) {
+        self.trees += 1;
+    }
+}
+
+/// Walking the component tree visits every component, which a frame with no inspector for it must not pay for.
+#[test]
+fn the_component_tree_is_walked_only_for_an_overlay_that_asks() {
+    crate::open_default_text_metrics();
+    let window = HeadlessWindow::new(200, 40);
+    let mut quiet = overlaid::<Rooted<false>>(Box::new(LocalApp(Labelled)));
+    quiet.new_events();
+    assert!(quiet.on_resume(&window));
+    run_a_pass(&mut quiet, &window);
+    assert_eq!(quiet.dev.trees, 0);
+    drop(quiet);
+
+    let mut asking = overlaid::<Rooted<true>>(Box::new(LocalApp(Labelled)));
+    asking.new_events();
+    assert!(asking.on_resume(&window));
+    run_a_pass(&mut asking, &window);
+    assert!(asking.dev.trees > 0);
+}
+
 /// An overlay that reads the window and draws a word of its own over it.
 #[derive(Default)]
 struct Inspecting {

@@ -1,6 +1,7 @@
 //! Play functions: scripted interactions against a mounted preview, each step logged with the frame it left behind.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 use std::time::Duration;
@@ -303,36 +304,48 @@ impl Play {
         copy
     }
 
+    /// Walks the stops one at a time, each read where the keyboard brings it into view, beside the same view with nothing focused. What a reader is told about the canvas is read once, before the walk: each stop then reads only where its own box and its cursor's stand now, so a canvas of thousands of stops costs each its own frames rather than a snapshot of the whole canvas.
     fn check_focus(&self) -> a11y::Report {
         let canvas = self.canvas();
         let order = canvas.with_entered(focus::tab_order);
-        let mut focused = Vec::new();
+        canvas.with_entered(focus::clear);
+        self.settle_now();
+        let told: HashMap<platform_core::AccessId, AccessNode> = self
+            .snapshot()
+            .into_iter()
+            .filter_map(|node| Some((node.id?, node)))
+            .collect();
+        let placed = |id: focus::FocusId| {
+            let mut node = told.get(&platform_core::AccessId::own(id))?.clone();
+            node.rect = canvas.with_entered(|| ui_core::accessibility::control_rect(id))?;
+            Some(node)
+        };
+        let mut report = a11y::Report::default();
         for stop in order {
-            // Brought into view before either frame is taken, so the stop is judged by what it draws on screen, wherever the play left the scroll and whatever a page leaves undrawn outside its view.
-            canvas.with_entered(|| {
-                focus::clear();
-                focus::perform(stop.id, focus::AccessAction::ScrollIntoView);
-            });
-            self.settle_now();
-            let rest = self.frame();
             canvas.with_entered(|| focus::request(stop.id));
             self.settle_now();
-            let frame = self.frame();
+            let focused = Frame::drawn(canvas);
             let holder = canvas.with_entered(focus::current);
-            let node = frame.access.as_deref().and_then(|access| {
-                access
-                    .snapshot
-                    .iter()
-                    .find(|node| {
-                        node.id.is_some() && node.id == holder.map(platform_core::AccessId::own)
-                    })
-                    .cloned()
-            });
-            if let Some(node) = node {
-                focused.push(a11y::FocusedStop { node, frame, rest });
-            }
+            let cursor = holder
+                .and_then(focus::active_descendant_state)
+                .and_then(&placed);
+            let node = holder.and_then(&placed);
+            canvas.with_entered(focus::clear);
+            self.settle_now();
+            let Some(mut node) = node else {
+                continue;
+            };
+            node.focused = true;
+            node.active_descendant = cursor.as_ref().and_then(|item| item.id);
+            let stop = a11y::FocusedStop {
+                node,
+                cursor,
+                focused,
+                unfocused: Frame::drawn(canvas),
+            };
+            report = report.and(a11y::check_focus(&stop));
         }
-        a11y::check_focus(&focused)
+        report
     }
 
     /// Moves the pointer onto the node `query` matches, presses and releases it there.

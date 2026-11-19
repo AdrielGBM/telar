@@ -4,8 +4,8 @@ use std::rc::Rc;
 use telar::preview::{Play, PreviewCtx, PreviewEntry, by_role};
 use telar::testing::{hold, lay_out_row, moved, press, release, route};
 use telar::{
-    Key, LayoutItem, LayoutStyle, NamedKey, RectStyle, RwSignal, StyledContainer, Text,
-    box_item, focus::Role, signal,
+    Key, LayoutItem, LayoutStyle, NamedKey, RectStyle, RwSignal, StyledContainer, Text, box_item,
+    focus::Role, signal,
 };
 
 use super::*;

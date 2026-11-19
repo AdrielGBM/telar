@@ -829,3 +829,102 @@ fn scroll_into_view_brings_a_control_below_the_view_into_it() {
     assert!(shown(), "asking for it scrolled it into the view");
     clear();
 }
+
+/// A column of `count` 40px controls in a scroll 200px tall, and the scroll's viewport.
+fn scrolled_controls(
+    count: usize,
+) -> (crate::LayoutScrollArea, Vec<FocusId>, crate::ScrollViewport) {
+    use crate::context::{compute_layout, reset_layout_runtime};
+    use crate::{Container, LayoutItem, StyledContainer, box_item};
+    use layout_core::{AvailableSpace, LayoutStyle};
+
+    reset_layout_runtime();
+    clear();
+    let mut ids = Vec::new();
+    let mut handed = None;
+    let scroll = crate::LayoutScrollArea::new_with(
+        LayoutStyle::new().width(100.0).height(200.0),
+        |viewport| {
+            handed = Some(viewport);
+            let controls = (0..count)
+                .map(|_| {
+                    let control = StyledContainer::new(
+                        LayoutStyle::new()
+                            .width(100.0)
+                            .height(40.0)
+                            .flex_shrink(0.0),
+                        |_r| renderer_core::RectStyle::default(),
+                        vec![],
+                    )?
+                    .control(Role::Button);
+                    ids.push(control.focus_id().expect("a control takes focus"));
+                    Ok(box_item(control))
+                })
+                .collect::<Result<Vec<_>, layout_core::LayoutError>>()?;
+            Ok(box_item(Container::new(
+                LayoutStyle::new().flex_column(),
+                controls,
+            )?))
+        },
+    )
+    .unwrap();
+    compute_layout(
+        scroll.layout_node(),
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    (scroll, ids, handed.expect("the builder ran"))
+}
+
+/// Focus arriving from the keyboard or the application on a control scrolled out of view brings it into view, as Tab does in a document; one the pointer pressed is already under it, and the view stays.
+#[test]
+fn focus_given_without_the_pointer_brings_the_control_into_view() {
+    let (_scroll, ids, viewport) = scrolled_controls(20);
+    request(ids[12]);
+    reactive_core::batch(|| {});
+    assert_eq!(viewport.peek_offset().1, 13.0 * 40.0 - 200.0);
+    request(ids[13]);
+    reactive_core::batch(|| {});
+    assert_eq!(
+        viewport.peek_offset().1,
+        14.0 * 40.0 - 200.0,
+        "Tab past the edge follows it"
+    );
+    viewport.scroll_to(0.0, 0.0);
+    request_from_pointer(ids[19]);
+    reactive_core::batch(|| {});
+    assert_eq!(viewport.peek_offset().1, 0.0);
+    clear();
+}
+
+/// What reads whether one control holds focus runs again when that control gains or loses it, not whenever focus moves between two others: a move of focus on a page of thousands of controls costs the two it moved between.
+#[test]
+fn a_move_of_focus_reaches_only_the_controls_it_moves_between() {
+    let (_scroll, ids, _viewport) = scrolled_controls(5);
+    let runs: Vec<Rc<std::cell::Cell<usize>>> = ids
+        .iter()
+        .map(|&id| {
+            let runs = Rc::new(std::cell::Cell::new(0));
+            let counted = Rc::clone(&runs);
+            effect(move || {
+                is_focused(id);
+                counted.set(counted.get() + 1);
+            });
+            runs
+        })
+        .collect();
+    let before: Vec<usize> = runs.iter().map(|runs| runs.get()).collect();
+    request(ids[1]);
+    request(ids[3]);
+    reactive_core::batch(|| {});
+    let after: Vec<usize> = runs.iter().map(|runs| runs.get()).collect();
+    let moved: Vec<usize> = before
+        .iter()
+        .zip(&after)
+        .map(|(was, now)| now - was)
+        .collect();
+    assert_eq!(moved, vec![0, 2, 0, 1, 0]);
+    assert!(is_focused(ids[3]) && !is_focused(ids[1]));
+    clear();
+}

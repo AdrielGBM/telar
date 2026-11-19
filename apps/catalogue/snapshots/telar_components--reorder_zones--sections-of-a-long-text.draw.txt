@@ -1,0 +1,422 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element scrollarea
+          clip 0,0 800x600
+            matrix 1,0,0,1,0,0
+              element group
+                element group
+                  matrix 1,0,0,1,16,16
+                    text 0,0 768x16.8 "100 sections of 30 sentences: only what the scroll shows is built" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                  end
+                end
+                element list
+                  element group
+                    element listitem
+                      rect 16,45 768x48
+                      element group
+                        element group
+                          matrix 1,0,0,1,16,57
+                            text 0,8 63x16.8 "Section 0" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                        element button
+                          rect 91,57 132x32 fill=#3852caff radius=10
+                          element group
+                            matrix 1,0,0,1,103,57
+                              text 0,8 108.72x16.8 "Unfold section 0" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                            end
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,93 768x48
+                      element group
+                        element group
+                          matrix 1,0,0,1,16,105
+                            text 0,8 59.42x16.8 "Section 1" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                        element button
+                          rect 87,105 114x32 fill=#4261edff radius=10
+                          element group
+                            matrix 1,0,0,1,99,105
+                              text 0,8 90x16.8 "Fold section 1" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                            end
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,141 768x29
+                      element group
+                        rect 16,141 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,147
+                            text 0,0 744x16.8 "Sentence 30" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,170 768x28
+                      element group
+                        rect 16,170 768x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,176
+                            text 0,0 744x16.8 "Sentence 31" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,199 768x29
+                      element group
+                        rect 16,199 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,205
+                            text 0,0 744x16.8 "Sentence 32" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,227 768x29
+                      element group
+                        rect 16,227 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,233
+                            text 0,0 744x16.8 "Sentence 33" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,256 768x29
+                      element group
+                        rect 16,256 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,262
+                            text 0,0 744x16.8 "Sentence 34" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,285 768x29
+                      element group
+                        rect 16,285 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,291
+                            text 0,0 744x16.8 "Sentence 35" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,314 768x28
+                      element group
+                        rect 16,314 768x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,320
+                            text 0,0 744x16.8 "Sentence 36" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,343 768x29
+                      element group
+                        rect 16,343 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,349
+                            text 0,0 744x16.8 "Sentence 37" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,371 768x29
+                      element group
+                        rect 16,371 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,377
+                            text 0,0 744x16.8 "Sentence 38" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,400 768x29
+                      element group
+                        rect 16,400 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,406
+                            text 0,0 744x16.8 "Sentence 39" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,429 768x29
+                      element group
+                        rect 16,429 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,435
+                            text 0,0 744x16.8 "Sentence 40" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,458 768x28
+                      element group
+                        rect 16,458 768x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,464
+                            text 0,0 744x16.8 "Sentence 41" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,487 768x29
+                      element group
+                        rect 16,487 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,493
+                            text 0,0 744x16.8 "Sentence 42" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,515 768x29
+                      element group
+                        rect 16,515 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,521
+                            text 0,0 744x16.8 "Sentence 43" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,544 768x29
+                      element group
+                        rect 16,544 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,550
+                            text 0,0 744x16.8 "Sentence 44" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,573 768x29
+                      element group
+                        rect 16,573 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,579
+                            text 0,0 744x16.8 "Sentence 45" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,602 768x28
+                      element group
+                        rect 16,602 768x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,608
+                            text 0,0 744x16.8 "Sentence 46" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,631 768x29
+                      element group
+                        rect 16,631 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,637
+                            text 0,0 744x16.8 "Sentence 47" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,659 768x29
+                      element group
+                        rect 16,659 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,665
+                            text 0,0 744x16.8 "Sentence 48" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,688 768x29
+                      element group
+                        rect 16,688 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,694
+                            text 0,0 744x16.8 "Sentence 49" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,717 768x29
+                      element group
+                        rect 16,717 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,723
+                            text 0,0 744x16.8 "Sentence 50" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,746 768x28
+                      element group
+                        rect 16,746 768x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,752
+                            text 0,0 744x16.8 "Sentence 51" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element listitem
+                      rect 16,775 768x29
+                      element group
+                        rect 16,775 768x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                        element group
+                          matrix 1,0,0,1,28,781
+                            text 0,0 744x16.8 "Sentence 52" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                          end
+                        end
+                      end
+                      element group
+                        element group
+                        end
+                      end
+                    end
+                    element group
+                      rect 16,803 768x91350
+                    end
+                  end
+                  element group
+                    rect 16,45 768x2
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

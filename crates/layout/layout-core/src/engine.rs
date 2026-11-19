@@ -289,7 +289,9 @@ impl LayoutEngine {
     }
 
     /// Replaces `node`'s declared style, carrying forward whatever the out-of-band mutators below set — a freshly-built `style` (e.g. from a `styled_by` closure reacting to an unrelated signal) has no way to know about them.
-    pub fn set_style(&mut self, node: NodeId, mut style: LayoutStyle) -> Result<(), LayoutError> {
+    ///
+    /// Answers whether the style changed: a closure that re-runs for a signal its style does not depend on declares the same style again, and that lays out nothing anew.
+    pub fn set_style(&mut self, node: NodeId, mut style: LayoutStyle) -> Result<bool, LayoutError> {
         self.alive(node)?;
         if let Some(previous) = self.styles.get(&node) {
             // The out-of-band answer only: a fresh style cannot know it was ever given, so it is carried forward. What the style says about being shown is left alone, since OR-ing the two made a node hidden once hidden forever.
@@ -308,9 +310,12 @@ impl LayoutEngine {
                 .leading_margin
                 .or(previous.logical.leading_margin);
         }
+        if self.styles.get(&node) == Some(&style) {
+            return Ok(false);
+        }
         self.push_style(node, &style);
         self.track(node, style);
-        Ok(())
+        Ok(true)
     }
 
     /// Replaces `parent`'s children with `children`, in order. Used by reactive lists to insert, move, and drop item nodes as their source collection changes.

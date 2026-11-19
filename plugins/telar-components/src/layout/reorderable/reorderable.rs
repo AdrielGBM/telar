@@ -48,7 +48,7 @@ pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, Layou
         drag_threshold,
         drop_preview,
     } = props;
-    ReorderGroup::new(&DragSession::new(), |slot| slot)
+    ReorderGroup::new(&DragSession::new(), Some)
         .reach(Reach::OwnZone)
         .drop_preview(drop_preview)
         .drag_threshold(drag_threshold)

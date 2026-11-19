@@ -78,6 +78,21 @@ mod measured {
         }
 
         fn under_header(items: Vec<Item>, estimate: f32, overscan: f32, header: f32) -> Self {
+            Self::mount(items, estimate, overscan, header, true)
+        }
+
+        /// The list drawn below a block `above` px tall that scrolls away with it.
+        fn below(items: Vec<Item>, estimate: f32, above: f32) -> Self {
+            Self::mount(items, estimate, 0.0, above, false)
+        }
+
+        fn mount(
+            items: Vec<Item>,
+            estimate: f32,
+            overscan: f32,
+            header: f32,
+            sticky: bool,
+        ) -> Self {
             reset_layout_runtime();
             set_surface_size(geometry_core::Size::new(WIDTH, VIEW));
             let items = signal(items);
@@ -91,8 +106,11 @@ mod measured {
                 LayoutScrollArea::new_with(
                     LayoutStyle::new().width(WIDTH).height(VIEW),
                     |viewport| {
-                        let rows =
-                            VirtualRows::new(viewport.clone(), estimate).under_header(header);
+                        let rows = VirtualRows::new(viewport.clone(), estimate);
+                        let rows = match sticky {
+                            true => rows.under_header(header),
+                            false => rows,
+                        };
                         handed = Some((viewport, rows.clone()));
                         let list = VirtualList::measured(
                             LayoutStyle::new().flex_column(),
@@ -123,14 +141,12 @@ mod measured {
                         if header == 0.0 {
                             return Ok(box_item(list));
                         }
-                        let heading = Canvas::new(
-                            LayoutStyle::new()
-                                .height(header)
-                                .flex_shrink(0.0)
-                                .sticky()
-                                .inset_top(0.0),
-                            |_| RenderNode::Empty,
-                        )?;
+                        let block = LayoutStyle::new().height(header).flex_shrink(0.0);
+                        let block = match sticky {
+                            true => block.sticky().inset_top(0.0),
+                            false => block,
+                        };
+                        let heading = Canvas::new(block, |_| RenderNode::Empty)?;
                         Ok(box_item(Container::new(
                             LayoutStyle::new().flex_column(),
                             vec![box_item(heading), box_item(list)],
@@ -189,6 +205,31 @@ mod measured {
         fn on_screen(&self, at: usize) -> f32 {
             self.laid_out(at).y - self.offset()
         }
+    }
+
+    #[test]
+    fn a_list_below_other_content_builds_the_rows_its_scroll_shows() {
+        let list = Mounted::below(numbered(std::iter::repeat_n(20.0, 1000)), 20.0, 600.0);
+        list.scroll_to(600.0);
+        list.settle();
+        assert!(
+            list.built().contains(&0),
+            "scrolled to the list's top, its first row is built: {:?}",
+            list.built()
+        );
+        assert_eq!(list.on_screen(0), 0.0);
+        assert_eq!(
+            list.rows.offset_of(3),
+            660.0,
+            "a row stands below what is above the list"
+        );
+        list.rows.reveal(40, 0.0);
+        list.settle();
+        assert_eq!(
+            list.on_screen(40) + 20.0,
+            VIEW,
+            "a row brought into view is brought to the edge it came from"
+        );
     }
 
     #[test]

@@ -161,7 +161,7 @@ is not is refused with a message naming `Clone`. `overscan:<px>` is how far beyo
 rows by default), and `rows:handle` stores the handle in a `signal(None::<VirtualRows>)` so the view can call
 `rows.reveal(index, margin)`, the way `view_progress:p` writes into a signal. Unbuilt rows stand at the estimate
 until some are measured and at the mean of those from then on (to the pixel), built ones are measured after layout, and
-the first row on screen holds still while estimates are corrected. When the source changes by a few inserted, removed
+the first row on screen holds still while estimates are corrected. A loop may sit below anything else in its scroll, a title or a form: the rows on screen are found from the list's own top in the content, and `rows.offset_of(index)` answers in the content's coordinates. When the source changes by a few inserted, removed
 or moved rows, only those rows are looked up and the height index is spliced; a change to most rows rebuilds it. Give the
 rows their spacing inside the row rather than as a `gap`, so that measuring counts it. Rows under a header held at
 the top of the scroll, a table's column headings, are `VirtualRows::new(viewport, estimate).under_header(height)`:

@@ -623,9 +623,9 @@ pub fn set_layout_style(node: NodeId, style: LayoutStyle) -> Result<(), LayoutEr
         Some(place) => place(style),
         None => style,
     };
-    restyle(node, |rt| {
-        rt.engine.set_style(node, style)?;
-        rt.engine.mark_dirty(node)
+    restyle(node, |rt| match rt.engine.set_style(node, style)? {
+        true => rt.engine.mark_dirty(node),
+        false => Ok(()),
     })
 }
 
@@ -655,9 +655,9 @@ pub fn place_layout(node: NodeId, place: Place) -> Result<(), LayoutError> {
         )
     });
     let style = place(declared);
-    restyle(node, |rt| {
-        rt.engine.set_style(node, style)?;
-        rt.engine.mark_dirty(node)
+    restyle(node, |rt| match rt.engine.set_style(node, style)? {
+        true => rt.engine.mark_dirty(node),
+        false => Ok(()),
     })
 }
 
@@ -1178,6 +1178,10 @@ impl LayoutRuntime {
 
     fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
         let before = self.engine.children(parent);
+        // A list that reconciles to the children it already had, as one following a signal that moved without changing what it shows does, lays out nothing anew.
+        if before == children && self.engine.is_alive(parent) {
+            return Ok(());
+        }
         if let Err(error) = self.engine.set_children(parent, children) {
             report_dead_child(&self.engine, parent, children);
             return Err(error);

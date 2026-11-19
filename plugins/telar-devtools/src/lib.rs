@@ -176,6 +176,10 @@ impl DevOverlay for DevTools {
         }
     }
 
+    fn wants_tree(&self) -> bool {
+        true
+    }
+
     fn on_tree(&mut self, nodes: &[SegmentNodeInfo]) {
         self.window.set_nodes(nodes);
         self.show_window();

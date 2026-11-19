@@ -319,7 +319,7 @@ impl Margin {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 /// How a node is laid out and placed, written in logical edges and resolved against the active direction.
 pub struct LayoutStyle {
     pub(crate) inner: Style,
