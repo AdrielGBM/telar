@@ -13,6 +13,7 @@ mod font_fit;
 mod font_settings;
 mod gradient;
 mod paint;
+mod ruby;
 mod scale;
 mod shape;
 mod span_segments;
@@ -27,6 +28,7 @@ pub use font_fit::{FitWidth, FontFit};
 pub use font_settings::{FontFeatures, FontTag, FontVariations};
 pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops, ResolvedGradient};
 pub use paint::{FillRule, LineCap, LineJoin, Paint, Shadow, Stroke};
+pub use ruby::{RubyFit, RubyStyle, WORD_JOINER, ruby_inline};
 pub use shape::{Border, BorderKind, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
 pub use span_segments::{Segment, span_segments};
 pub use text_case::{CasedText, TextCase, case_text};
@@ -233,6 +235,8 @@ pub struct TextStyle {
     pub decoration: TextDecoration,
     /// The language the text is written in, whose rules [`text_case`](Self::text_case) follows; `None` takes the language-neutral ones.
     pub lang: Option<LocaleTag>,
+    /// How the readings its spans carry are sized. See [`RubyStyle`].
+    pub ruby: RubyStyle,
 }
 
 impl TextStyle {
@@ -255,6 +259,7 @@ impl TextStyle {
             text_case: TextCase::AsWritten,
             decoration: TextDecoration::default(),
             lang: None,
+            ruby: RubyStyle::default(),
         }
     }
 
@@ -315,6 +320,7 @@ impl TextStyle {
             && self.font_features == other.font_features
             && self.text_case == other.text_case
             && self.lang == other.lang
+            && self.ruby == other.ruby
     }
 
     pub fn with_font_variations(mut self, font_variations: FontVariations) -> Self {
@@ -380,6 +386,12 @@ impl TextStyle {
 
     pub fn with_underline_color(mut self, color: impl Into<Paint>) -> Self {
         self.decoration.color = Some(color.into());
+        self
+    }
+
+    /// Sizes the readings its spans carry. See [`RubyStyle`].
+    pub fn with_ruby(mut self, ruby: RubyStyle) -> Self {
+        self.ruby = ruby;
         self
     }
 

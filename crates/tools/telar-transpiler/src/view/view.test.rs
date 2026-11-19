@@ -1699,6 +1699,22 @@ fn a_text_with_spans_is_one_paragraph_of_runs() {
     );
 }
 
+/// A span's reading is set above it: a quoted one interpolates as text does, an expression is read each time it runs.
+#[test]
+fn a_span_takes_a_reading_quoted_or_read_from_state() {
+    let src = "[logic]\nlet shown = signal(Some(String::from(\"よ\")));\n[view]\ntext\n    span \"漢字\" ruby:\"かんじ\"\n    span \"を\"\n    span \"読む\" ruby:$shown\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert_eq!(code.matches(".ruby(").count(), 2, "{code}");
+    assert!(code.contains("\"かんじ\""), "{code}");
+    assert!(
+        code.contains(".ruby(") && code.contains("shown.get()"),
+        "{code}"
+    );
+}
+
 #[test]
 fn a_span_outside_a_text_and_a_box_inside_one_are_build_errors() {
     let stray = crate::transpile_source("[view]\ncol\n    span \"x\"\n", "demo", None, None)

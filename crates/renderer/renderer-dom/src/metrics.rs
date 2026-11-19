@@ -77,7 +77,7 @@ fn probe_settings(style: &TextStyle) -> String {
 }
 
 /// How wide `text` is in `style`, tracking included. Tracking follows every character, the last one too, as CSS and the GPU shaper both apply it: a line tracked tight ends that much short of its last glyph's advance.
-fn width_of(text: &str, style: &TextStyle) -> f32 {
+pub(crate) fn width_of(text: &str, style: &TextStyle) -> f32 {
     if text.is_empty() {
         return 0.0;
     }
@@ -153,7 +153,13 @@ fn natural(style: &TextStyle) -> f32 {
 
 /// How far below the top of its line box a line in `style` sits on its baseline: half the leading the line box adds, then the face's ascent, as a document lays a line out.
 pub(crate) fn baseline(style: &TextStyle) -> f32 {
-    let (ascent, descent) = with_context(|ctx| {
+    let (ascent, descent) = content_area(style);
+    (line_height(style) - (ascent + descent)) / 2.0 + ascent
+}
+
+/// How far the face's content area reaches above and below the baseline in `style`: its ascent and descent, which a document centres in the line box.
+fn content_area(style: &TextStyle) -> (f32, f32) {
+    with_context(|ctx| {
         let (font, scale) = canvas_font(style);
         ctx.set_font(&font);
         ctx.measure_text("Hg")
@@ -165,13 +171,86 @@ pub(crate) fn baseline(style: &TextStyle) -> f32 {
             })
             .unwrap_or((style.font_size * 0.8, style.font_size * 0.2))
     })
-    .unwrap_or((style.font_size * 0.8, style.font_size * 0.2));
-    (line_height(style) - (ascent + descent)) / 2.0 + ascent
+    .unwrap_or((style.font_size * 0.8, style.font_size * 0.2))
 }
 
-/// The paragraph as the browser would break it, in the style it will be drawn in.
-fn wrap(text: &str, max_width: f32, style: &TextStyle) -> (f32, usize) {
-    let width = |run: &str| width_of(run, style);
+/// A paragraph as the browser lays it out: its text in the case its style shows it in, every ruby base glued into one word as `white-space: nowrap` keeps its `<ruby>` on one line, and what each base adds to its line.
+struct Shown<'a> {
+    cased: renderer_core::CasedText<'a>,
+    bases: Vec<Base>,
+}
+
+/// One ruby base of a paragraph: where it is in the shown text, how much wider its reading makes it, and how much taller it makes its line.
+struct Base {
+    range: std::ops::Range<usize>,
+    widening: f32,
+    room: f32,
+}
+
+impl<'a> Shown<'a> {
+    fn of(text: &'a str, spans: Option<&'a [Span]>, style: &TextStyle) -> Self {
+        let cased = case_text(text, spans, style).glued();
+        let bases = cased
+            .spans
+            .iter()
+            .flat_map(|spans| spans.iter())
+            .filter_map(|span| {
+                let reading = span.ruby.as_deref()?;
+                let range = span.range.start as usize..span.range.end as usize;
+                let run_style = span.over.over(style, geometry_core::Size::ZERO);
+                let fit = crate::runs::fit_reading(
+                    cased.text.get(range.clone())?,
+                    reading,
+                    &run_style,
+                    &mut width_of,
+                );
+                Some(Base {
+                    range,
+                    widening: fit.widening,
+                    room: reading_room(&run_style),
+                })
+            })
+            .collect();
+        Self { cased, bases }
+    }
+
+    fn text(&self) -> &str {
+        &self.cased.text
+    }
+
+    /// The bases that begin inside `run`, a slice of the shown text.
+    fn bases_in(&self, run: &str) -> impl Iterator<Item = &Base> {
+        let start = run.as_ptr() as usize - self.text().as_ptr() as usize;
+        let span = start..start + run.len();
+        self.bases
+            .iter()
+            .filter(move |base| span.contains(&base.range.start))
+    }
+
+    /// How wide `run`, a slice of the shown text, comes out: its letters, and the room the readings of the bases in it widen them by.
+    fn width(&self, run: &str, style: &TextStyle) -> f32 {
+        width_of(run, style) + self.bases_in(run).map(|base| base.widening).sum::<f32>()
+    }
+
+    /// How much taller than a line box `line`, a slice of the shown text, comes out to hold the readings over it.
+    fn room(&self, line: &str) -> f32 {
+        self.bases_in(line)
+            .map(|base| base.room)
+            .fold(0.0, f32::max)
+    }
+}
+
+/// How much a reading over a base in `style` makes its line grow: its `<rt>`, one line box as tall as its size, sits on the face's content area, and what of it the half-leading above cannot hold the browser adds to the line.
+fn reading_room(style: &TextStyle) -> f32 {
+    let (ascent, descent) = content_area(style);
+    let half_leading = (line_height(style) - (ascent + descent)) / 2.0;
+    (style.ruby.nominal(style.font_size) - half_leading).max(0.0)
+}
+
+/// The paragraph as the browser would break it, in the style it will be drawn in: its widest line and how tall its lines come out, the room their readings take included.
+fn wrap(shown: &Shown<'_>, max_width: f32, style: &TextStyle) -> (f32, f32) {
+    let text = shown.text();
+    let width = |run: &str| shown.width(run, style);
     // `pre` does not hang a space at the end of a line the way `pre-wrap` does: there it takes its room, and a caret after it is drawn after it.
     let (widest, mut lines) = match style.text_wrap {
         TextWrap::NoWrap => crate::wrap::unbroken(text, width),
@@ -180,7 +259,24 @@ fn wrap(text: &str, max_width: f32, style: &TextStyle) -> (f32, usize) {
     if let Some(max) = style.clamp.map(|clamp| clamp.max_lines()) {
         lines = lines.min(max);
     }
-    (widest, lines.max(1))
+    let lines = lines.max(1);
+    let mut room = 0.0;
+    if !shown.bases.is_empty() {
+        let mut each = |line: &str| room += shown.room(line);
+        match style.text_wrap {
+            TextWrap::NoWrap => text.split('\n').take(lines).for_each(each),
+            TextWrap::Wrap => {
+                let mut seen = 0;
+                crate::wrap::each_line(text, column(max_width, style), width, |line| {
+                    if seen < lines {
+                        each(line);
+                    }
+                    seen += 1;
+                });
+            }
+        }
+    }
+    (widest, lines as f32 * line_height(style) + room)
 }
 
 /// The width a paragraph in `style` wraps at, given `max_width`.
@@ -278,14 +374,12 @@ impl TextMetrics for CanvasTextMetrics {
         max_width: f32,
         style: &TextStyle,
     ) -> (f32, f32) {
-        let (width, lines) = wrap(&case_text(text, spans, style).text, max_width, style);
-        (width, lines as f32 * line_height(style))
+        wrap(&Shown::of(text, spans, style), max_width, style)
     }
 
     fn min_content(&self, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
-        let widest = crate::wrap::widest_word(&case_text(text, spans, style).text, |word| {
-            width_of(word, style)
-        });
+        let shown = Shown::of(text, spans, style);
+        let widest = crate::wrap::widest_word(shown.text(), |word| shown.width(word, style));
         self.measure(text, spans, widest, style)
     }
 
@@ -301,10 +395,12 @@ impl TextMetrics for CanvasTextMetrics {
         max_width: f32,
         style: &TextStyle,
     ) -> Vec<TextLine> {
-        let cased = case_text(text, spans, style);
+        let laid = Shown::of(text, spans, style);
+        let cased = &laid.cased;
         let shown: &str = &cased.text;
-        let mut starts =
-            crate::wrap::line_starts(shown, column(max_width, style), |run| width_of(run, style));
+        let mut starts = crate::wrap::line_starts(shown, column(max_width, style), |run| {
+            laid.width(run, style)
+        });
         if shown.ends_with('\n') {
             starts.push(shown.len());
         }
@@ -328,8 +424,8 @@ impl TextMetrics for CanvasTextMetrics {
                 0.0
             };
             let width = match wraps {
-                true => width_of(line.trim_end(), style),
-                false => width_of(line, style),
+                true => laid.width(line.trim_end(), style),
+                false => laid.width(line, style),
             };
             (room - width).max(0.0)
         };
@@ -343,7 +439,7 @@ impl TextMetrics for CanvasTextMetrics {
                     renderer_core::TextAlign::Start | renderer_core::TextAlign::Justify => 0.0,
                 };
                 let (mut end, mut before) = (0, 0.0);
-                TextLine::left_to_right(&cased, text, range, start_x, |part| {
+                TextLine::left_to_right(cased, text, range, start_x, |part| {
                     end += part.len();
                     let after = width_of(&line[..end], style);
                     let advance = after - before;

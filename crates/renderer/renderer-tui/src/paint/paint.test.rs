@@ -461,3 +461,25 @@ fn an_underline_marks_its_cells_and_nothing_else() {
     assert!(buf.get(3, 0).unwrap().attrs.contains(Attrs::UNDERLINE));
     assert!(!buf.get(0, 1).unwrap().attrs.contains(Attrs::UNDERLINE));
 }
+
+#[test]
+fn a_reading_is_written_after_its_base_in_parentheses() {
+    let mut buf = grid(20, 1);
+    let spans: Arc<[renderer_core::Span]> = Arc::from(vec![
+        renderer_core::Span::new(0..6, renderer_core::Declared::default()).with_ruby("かんじ"),
+    ]);
+    paint(
+        &mut buf,
+        &[DrawCommand::Text {
+            text: "漢字を".into(),
+            spans: Some(spans),
+            rect: Rect::new(0.0, 0.0, 160.0, 16.0),
+            style: Arc::new(TextStyle::new(14.0, Paint::Solid(Color::WHITE))),
+        }],
+    );
+    assert!(
+        row(&buf, 0).starts_with("漢字(かんじ)を"),
+        "{:?}",
+        row(&buf, 0)
+    );
+}

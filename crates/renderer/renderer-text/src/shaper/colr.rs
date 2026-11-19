@@ -55,7 +55,8 @@ impl TextShaper {
             None,
             shaped_rect,
             style,
-        );
+        )
+        .buffer;
         let color = style.color.solid_color();
         for run in buffer.layout_runs() {
             for glyph in run.glyphs.iter() {

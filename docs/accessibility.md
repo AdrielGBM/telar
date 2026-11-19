@@ -107,6 +107,13 @@ On a box with no role of its own, the name does replace the words it draws: a co
 again beside it. A control inside such a box keeps its own name and stays reachable; only the text no control
 owns is left out, and a paragraph holding a link is kept to be read around the link.
 
+## Ruby
+
+A reading set above its base (see [ruby.md](ruby.md)) is read after it, in parentheses: `span "漢字" ruby:"かんじ"`
+followed by `span "を"` reads as `漢字(かんじ)を`, and a link run with a reading is named the same way. The snapshot,
+AccessKit, Android, the canvas tree and the terminal's reading all take that text; a document writes `<ruby>` with
+`<rp>` parentheses around its `<rt>`, which a browser's reader reads the same way.
+
 ## Controls and their state
 
 `role:` on a `box`, `col`, `row` or `grid` says what the box is. A region or a heading (`role:navigation`,

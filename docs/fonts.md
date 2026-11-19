@@ -89,6 +89,7 @@ feature, because a canvas `font` carries only family, size, weight and slant; a 
 
 The case a text is shown in and the line under it are text properties too: see
 [Text case and underline](text-case-and-underline.md).
+A reading set above a run, furigana, is a property of the run: see [Ruby](ruby.md).
 
 ## Faces that arrive later
 

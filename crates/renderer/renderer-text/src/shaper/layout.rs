@@ -4,15 +4,26 @@ use super::TextShaper;
 use super::cache::{
     ShapingCacheKey, hash_text, line_snapped_height, text_style_bits, visible_lines,
 };
+use super::ruby::{Laid, Lift};
 use super::{
     effective_line_height, from_cosmic_color, glyph_index_at, in_layout_units, line_offsets,
-    make_buffer, make_cased_buffer, physical_glyph, resolve_coverage, shape_buffer,
+    make_buffer, make_cased_buffer, physical_glyph, resolve_coverage, shape_buffer, shown,
 };
 use cosmic_text::{CacheKey, SwashContent, Wrap};
 use geometry_core::{Color, Rect};
 use renderer_core::{PlacedGlyph, Raster, Span, TextAlign, TextLine, TextStyle, TextWrap};
 
 use super::atlas::GlyphInfo;
+
+impl TextShaper {
+    /// How each line of `laid` moves to give its readings room, with its baseline shifted as `style` draws it; empty for a paragraph without readings, whose lines stay where cosmic-text put them.
+    pub(super) fn lifts(&mut self, laid: &Laid, style: &TextStyle) -> Vec<Lift> {
+        if laid.readings.is_empty() {
+            return Vec::new();
+        }
+        laid.lifts(self.baseline_shift(style) as f32)
+    }
+}
 
 impl TextShaper {
     /// Lays `text` into `rect`, `spans` colouring and restyling the byte ranges that differ from `style`.
@@ -41,7 +52,7 @@ impl TextShaper {
         let shift = self.baseline_shift(style) as f32;
 
         if let Some(spans) = spans.filter(|s| !s.is_empty()) {
-            let buffer = make_buffer(
+            let laid = make_buffer(
                 &mut self.font_system,
                 &mut self.family_availability,
                 text,
@@ -49,20 +60,21 @@ impl TextShaper {
                 rect,
                 style,
             );
-            let mut glyphs: Vec<(CacheKey, i32, i32, Color)> = Vec::new();
-            for run in buffer.layout_runs() {
-                for glyph in run.glyphs.iter() {
+            let glyphs: Vec<(CacheKey, i32, i32, Color)> = laid
+                .placed_glyphs(shift)
+                .iter()
+                .map(|(glyph, baseline)| {
                     let physical = physical_glyph(
                         glyph,
-                        (0., (run.line_y + shift) * scale_factor),
+                        (0., baseline * scale_factor),
                         scale_factor,
                         style.raster,
                     );
                     let glyph_color = glyph.color_opt.map(from_cosmic_color).unwrap_or(color);
-                    glyphs.push((physical.cache_key, physical.x, physical.y, glyph_color));
-                }
-            }
-            drop(buffer);
+                    (physical.cache_key, physical.x, physical.y, glyph_color)
+                })
+                .collect();
+            drop(laid);
             out.reserve(glyphs.len());
             for (cache_key, px, py, glyph_color) in glyphs {
                 self.emit_glyph(
@@ -105,7 +117,8 @@ impl TextShaper {
                     None,
                     shaped_rect,
                     style,
-                );
+                )
+                .buffer;
                 let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
                 for run in buffer.layout_runs() {
                     for glyph in run.glyphs.iter() {
@@ -327,7 +340,7 @@ impl TextShaper {
             height: 100000.0,
         };
         // `make_buffer` already applies the clamp, so the measured extent reflects it.
-        let buffer = make_buffer(
+        let laid = make_buffer(
             &mut self.font_system,
             &mut self.family_availability,
             text,
@@ -335,14 +348,16 @@ impl TextShaper {
             rect,
             style,
         );
+        let lifts = self.lifts(&laid, style);
 
         let mut width: f32 = 0.0;
         let mut height: f32 = 0.0;
         let line_height = effective_line_height(style);
 
-        for run in buffer.layout_runs() {
+        for (line, run) in laid.buffer.layout_runs().enumerate() {
+            let drop = lifts.get(line).map_or(0.0, |lift| lift.drop);
             // From the line's top, not its baseline: `line_y` is where the letters sit, so adding a line height to it counted the ascent twice and every text box reserved nearly half again what it draws.
-            height = run.line_top + line_height;
+            height = run.line_top + drop + line_height;
             // The line's advance width, not the glyph ink boxes: the last glyph's advance extends past its ink, so an ink-based width leaves the box a hair too narrow and the renderer wraps the final glyph.
             width = width.max(run.line_w);
         }
@@ -374,8 +389,8 @@ impl TextShaper {
             width: max_width,
             height: 100000.0,
         };
-        let cased = renderer_core::case_text(text, spans, style);
-        let buffer = make_cased_buffer(
+        let cased = shown(text, spans, style);
+        let laid = make_cased_buffer(
             &mut self.font_system,
             &mut self.family_availability,
             &cased.text,
@@ -383,7 +398,8 @@ impl TextShaper {
             rect,
             style,
         );
-        glyph_index_at(&buffer, effective_line_height(style), at)
+        let lifts = self.lifts(&laid, style);
+        glyph_index_at(&laid, &lifts, effective_line_height(style), at)
             .map(|shown| cased.source_index(shown))
     }
 
@@ -402,7 +418,7 @@ impl TextShaper {
             width: max_width,
             height: 100000.0,
         };
-        let cased = renderer_core::case_text(text, spans, style);
+        let cased = shown(text, spans, style);
         let buffer = shape_buffer(
             &mut self.font_system,
             &mut self.family_availability,
@@ -410,7 +426,8 @@ impl TextShaper {
             cased.spans.as_deref(),
             rect,
             style,
-        );
+        )
+        .buffer;
         let offsets = line_offsets(&buffer);
         let mut lines: Vec<TextLine> = buffer
             .layout_runs()
@@ -469,7 +486,7 @@ impl TextShaper {
             width: 0.0,
             height: 100000.0,
         };
-        let cased = renderer_core::case_text(text, spans, style);
+        let cased = shown(text, spans, style);
         let mut buffer = shape_buffer(
             &mut self.font_system,
             &mut self.family_availability,
@@ -477,7 +494,8 @@ impl TextShaper {
             cased.spans.as_deref(),
             rect,
             style,
-        );
+        )
+        .buffer;
         buffer.set_wrap(Wrap::Word);
         buffer.shape_until_scroll(&mut self.font_system, false);
         let widest = buffer
@@ -511,7 +529,8 @@ impl TextShaper {
             None,
             rect,
             style,
-        );
+        )
+        .buffer;
         let shift = self.baseline_shift(style) as f32;
         // Collected first, so the immutable `layout_runs` borrow ends before the mutable lookups below.
         let mut glyphs: Vec<(CacheKey, i32)> = Vec::new();

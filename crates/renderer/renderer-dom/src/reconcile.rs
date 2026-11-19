@@ -287,6 +287,10 @@ impl Surface for LiveSurface<'_> {
             .root_font_size
             .get_or_insert_with(|| root_font_size(self.host))
     }
+
+    fn text_width(&mut self, text: &str, style: &TextStyle) -> f32 {
+        crate::metrics::width_of(text, style)
+    }
 }
 
 /// The computed font size of the document's root element, or the browser's default where it cannot be read.

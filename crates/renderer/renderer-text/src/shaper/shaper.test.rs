@@ -185,6 +185,7 @@ fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
             rect,
             style,
         )
+        .buffer
     };
 
     if shaped(&mut sh, &base).layout_runs().count() <= 2 {
@@ -239,7 +240,8 @@ fn a_clamp_that_cuts_a_later_paragraph_keeps_every_earlier_paragraph_whole() {
         None,
         rect,
         &base,
-    );
+    )
+    .buffer;
     let first_runs = unclamped
         .layout_runs()
         .filter(|run| run.line_i == 0)
@@ -260,7 +262,8 @@ fn a_clamp_that_cuts_a_later_paragraph_keeps_every_earlier_paragraph_whole() {
             None,
             rect,
             &base.clone().with_clamp(max, ellipsis),
-        );
+        )
+        .buffer;
         let kept: Vec<&str> = clamped.lines.iter().map(|line| line.text()).collect();
         assert_eq!(
             kept.first().copied(),
@@ -410,7 +413,8 @@ fn pixel_raster_collapses_the_subpixel_bins_smooth_keeps() {
         None,
         rect,
         &style,
-    );
+    )
+    .buffer;
     let Some(glyph) = buffer
         .layout_runs()
         .flat_map(|run| run.glyphs.iter())
@@ -451,6 +455,7 @@ fn pixel_raster_shapes_under_its_own_cache_key() {
             rect,
             style,
         )
+        .buffer
         .layout_runs()
         .flat_map(|run| run.glyphs.iter())
         .next()
@@ -712,7 +717,8 @@ fn a_named_family_shapes_in_that_face() {
             None,
             rect,
             &style,
-        );
+        )
+        .buffer;
         buffer
             .layout_runs()
             .next()
@@ -746,7 +752,8 @@ fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
         None,
         rect,
         &base,
-    );
+    )
+    .buffer;
     if plain.layout_runs().count() < 2 {
         return;
     }
@@ -762,7 +769,8 @@ fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
         Some(&spans),
         rect,
         &base,
-    );
+    )
+    .buffer;
     assert_eq!(
         spanned.layout_runs().count(),
         2,
@@ -795,7 +803,8 @@ fn a_span_restyles_only_its_own_range() {
         Some(&spans),
         rect,
         &style,
-    );
+    )
+    .buffer;
     let weights: Vec<(usize, u16)> = buffer
         .layout_runs()
         .flat_map(|run| run.glyphs.iter().map(|g| (g.start, g.font_weight.0)))
@@ -957,7 +966,8 @@ fn an_underline_sits_its_offset_below_the_baseline_across_the_glyphs() {
         None,
         rect,
         &style,
-    );
+    )
+    .buffer;
     let baseline =
         buffer.layout_runs().next().expect("one line").line_y + sh.baseline_shift(&style) as f32;
     assert_eq!(stroke.rect.y, (20.0 + baseline + 4.0).round());
@@ -981,7 +991,8 @@ fn an_underline_from_the_font_is_at_least_a_device_pixel_and_below_the_baseline(
         None,
         rect,
         &plain(12.0),
-    );
+    )
+    .buffer;
     let baseline = buffer.layout_runs().next().expect("one line").line_y
         + sh.baseline_shift(&plain(12.0)) as f32;
     assert!(strokes[0].rect.y >= baseline);
@@ -1043,7 +1054,8 @@ fn a_measured_line_is_as_wide_as_the_run_drawn_from_it() {
             None,
             unbounded,
             &style,
-        );
+        )
+        .buffer;
         let drawn = buffer
             .layout_runs()
             .filter_map(|run| run.glyphs.last().map(|glyph| glyph.x + glyph.w))

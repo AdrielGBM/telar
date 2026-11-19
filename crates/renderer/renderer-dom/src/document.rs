@@ -110,6 +110,9 @@ pub(crate) trait Surface {
 
     /// The font size of the document's root element in CSS pixels, which a text's `rem` size is of: the reader's text size setting, which the platform reports as the text scale the layout already sized the text at.
     fn root_font_size(&mut self) -> f32;
+
+    /// How wide `text` comes out on one line in `style`, as the browser draws it: what a reading is fitted to its base by. Zero where nothing on the surface measures, which sets every reading at its own size.
+    fn text_width(&mut self, text: &str, style: &TextStyle) -> f32;
 }
 
 /// The root font size every browser starts from until its reader changes it, in CSS pixels.
@@ -1097,7 +1100,15 @@ impl Walk<'_> {
                     runs: spans
                         .as_deref()
                         .filter(|spans| !spans.is_empty())
-                        .map(|spans| crate::runs::runs_of(text, spans, root_font_size)),
+                        .map(|spans| {
+                            crate::runs::runs_of(
+                                text,
+                                spans,
+                                style,
+                                root_font_size,
+                                &mut |run, style| self.surface.text_width(run, style),
+                            )
+                        }),
                     claims_background: paint::text_claims_background(style),
                 });
             }

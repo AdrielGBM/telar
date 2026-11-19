@@ -6,7 +6,9 @@ use cosmic_text::{
 };
 use geometry_core::{Color, Rect};
 use renderer_cache::{Cache, CacheStat, Policy, limits};
-use renderer_core::{FontFamily, FontStyle, Paint, Raster, Span, TextAlign, TextStyle, TextWrap};
+use renderer_core::{
+    FontFamily, FontStyle, Paint, Raster, Span, TextAlign, TextStyle, TextWrap, WORD_JOINER,
+};
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
@@ -21,6 +23,7 @@ mod layout;
 mod lines_tests;
 mod metrics;
 mod raster;
+mod ruby;
 #[cfg(test)]
 #[path = "shaper.test.rs"]
 mod tests;
@@ -31,6 +34,7 @@ pub use colr::ColrGlyph;
 pub use decoration::DecorationStroke;
 
 use crate::fonts::{self, Fonts};
+use ruby::Laid;
 
 use cache::{GlyphPositions, ShapingCacheKey};
 
@@ -195,19 +199,43 @@ fn text_attrs<'a>(
     attrs
 }
 
+/// One run of a paragraph in one style: its text, its style, and the reading set above it when it is a ruby base.
+struct StyledRun<'a> {
+    text: &'a str,
+    style: TextStyle,
+    reading: Option<&'a str>,
+}
+
 /// The paragraph cut into runs of one style each: every span in order, with the paragraph's own style filling the gaps between them.
-fn styled_runs<'a>(text: &'a str, spans: &[Span], style: &TextStyle) -> Vec<(&'a str, TextStyle)> {
+fn styled_runs<'a>(text: &'a str, spans: &'a [Span], style: &TextStyle) -> Vec<StyledRun<'a>> {
     renderer_core::span_segments(text, spans)
         .map(|segment| {
-            let run_style = match segment.span {
-                Some((_, span)) => span.over.over(style, geometry_core::Size::ZERO),
-                None => style.clone(),
+            let (run_style, reading) = match segment.span {
+                Some((_, span)) => (
+                    span.over.over(style, geometry_core::Size::ZERO),
+                    span.ruby.as_deref(),
+                ),
+                None => (style.clone(), None),
             };
-            (&text[segment.range], run_style)
+            StyledRun {
+                text: &text[segment.range],
+                style: run_style,
+                reading,
+            }
         })
         .collect()
 }
 
+/// The paragraph as it is shaped: its text in the case its style shows it in, with every ruby base glued into one word (see [`renderer_core::CasedText::glued`]).
+fn shown<'a>(
+    text: &'a str,
+    spans: Option<&'a [Span]>,
+    style: &TextStyle,
+) -> renderer_core::CasedText<'a> {
+    renderer_core::case_text(text, spans, style).glued()
+}
+
+/// Shapes `text` into `rect`, fitting each reading its spans carry to its base first, so a base its reading widens is laid out that wide.
 fn shape_buffer(
     font_system: &mut FontSystem,
     family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
@@ -215,6 +243,49 @@ fn shape_buffer(
     spans: Option<&[Span]>,
     rect: Rect,
     style: &TextStyle,
+) -> Laid {
+    let readings: Vec<ruby::Reading> = match spans {
+        Some(spans) if spans.iter().any(|span| span.ruby.is_some()) => {
+            styled_runs(text, spans, style)
+                .iter()
+                .enumerate()
+                .filter_map(|(run, styled)| {
+                    styled.reading.map(|reading| {
+                        ruby::fit_reading(
+                            font_system,
+                            family_availability,
+                            run + 1,
+                            styled.text,
+                            &styled.style,
+                            reading,
+                        )
+                    })
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+    let buffer = build_buffer(
+        font_system,
+        family_availability,
+        text,
+        spans,
+        rect,
+        style,
+        &readings,
+    );
+    Laid { buffer, readings }
+}
+
+/// Shapes `text` into `rect`, each base among `readings` widened by its reading's spacing.
+fn build_buffer(
+    font_system: &mut FontSystem,
+    family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
+    text: &str,
+    spans: Option<&[Span]>,
+    rect: Rect,
+    style: &TextStyle,
+    readings: &[ruby::Reading],
 ) -> Buffer {
     // `>` rather than `<=` negated, so a NaN size is refused too.
     if !(style.font_size > 0.0 && effective_line_height(style) > 0.0) {
@@ -240,7 +311,8 @@ fn shape_buffer(
             let runs = styled_runs(text, spans, style);
             // A loop rather than `.iter().map(...).collect()`: each run resolves its family against the font database through the same `&mut` cache, which a closure re-invoked per item cannot reborrow as readily as a plain loop body can.
             let mut resolved: Vec<(&str, Attrs<'_>)> = Vec::with_capacity(runs.len());
-            for (run, (slice, run_style)) in runs.iter().enumerate() {
+            for (run, styled) in runs.iter().enumerate() {
+                let run_style = &styled.style;
                 let mut run_attrs =
                     text_attrs(run_style, font_system, family_availability).metadata(run + 1);
                 if run_style.font_size != style.font_size
@@ -255,7 +327,23 @@ fn shape_buffer(
                 if let Paint::Solid(color) = run_style.color {
                     run_attrs = run_attrs.color(to_cosmic_color(color));
                 }
-                resolved.push((*slice, run_attrs));
+                let spacing = ruby::spacing_of(readings, run + 1);
+                if spacing > 0.0 && run_style.font_size > 0.0 {
+                    let spread = run_attrs
+                        .clone()
+                        .letter_spacing((run_style.letter_spacing + spacing) / run_style.font_size);
+                    // Every glyph of the base but the joiners holding it together takes the spacing, so a reading wider than its base spreads the base's letters rather than the gaps between words.
+                    for (at, letter) in styled.text.char_indices() {
+                        let piece = &styled.text[at..at + letter.len_utf8()];
+                        let piece_attrs = match letter {
+                            WORD_JOINER => run_attrs.clone(),
+                            _ => spread.clone(),
+                        };
+                        resolved.push((piece, piece_attrs));
+                    }
+                    continue;
+                }
+                resolved.push((styled.text, run_attrs));
             }
             buffer.set_rich_text(resolved, &attrs, Shaping::Advanced, None);
         }
@@ -270,7 +358,7 @@ fn shape_buffer(
     buffer
 }
 
-/// `spans` cut to the first `len` bytes, for a paragraph the clamp has truncated. Without this a clamped mixed paragraph would carry ranges reaching past the text it now holds.
+/// `spans` cut to the first `len` bytes, for a paragraph the clamp has truncated. Without this a clamped mixed paragraph would carry ranges reaching past the text it now holds; a base the cut reaches into loses its reading, which reads the whole base.
 fn clip_spans(spans: Option<&[Span]>, len: usize) -> Option<Vec<Span>> {
     let spans = spans?;
     Some(
@@ -279,8 +367,8 @@ fn clip_spans(spans: Option<&[Span]>, len: usize) -> Option<Vec<Span>> {
             .filter(|s| (s.range.start as usize) < len)
             .map(|s| Span {
                 range: s.range.start..s.range.end.min(len as u32),
-                over: s.over.clone(),
-                link: s.link.clone(),
+                ruby: s.ruby.clone().filter(|_| s.range.end as usize <= len),
+                ..s.clone()
             })
             .collect(),
     )
@@ -299,16 +387,28 @@ fn line_offsets(buffer: &Buffer) -> Vec<usize> {
         .collect()
 }
 
-/// The byte in the text `buffer` was shaped from of the glyph under `(x, y)`, lines stacked `line_height` apart from the top.
-pub(super) fn glyph_index_at(
-    buffer: &Buffer,
+/// The byte in the text `laid` was shaped from of the glyph under `(x, y)`, each line `line_height` tall below the room `lifts` makes above it for its readings: a press on a reading lands in that room, over its base, and answers with the base's glyph under it.
+fn glyph_index_at(
+    laid: &Laid,
+    lifts: &[ruby::Lift],
     line_height: f32,
     (x, y): (f32, f32),
 ) -> Option<usize> {
-    let offsets = line_offsets(buffer);
-    let run = buffer
+    let offsets = line_offsets(&laid.buffer);
+    let run = laid
+        .buffer
         .layout_runs()
-        .find(|run| y >= run.line_top && y < run.line_top + line_height)?;
+        .zip(
+            lifts
+                .iter()
+                .copied()
+                .chain(std::iter::repeat(ruby::Lift::default())),
+        )
+        .find(|(run, lift)| {
+            let bottom = run.line_top + lift.drop + line_height;
+            y >= run.line_top + lift.drop - lift.grow && y < bottom
+        })
+        .map(|(run, _)| run)?;
     let glyph = run
         .glyphs
         .iter()
@@ -328,7 +428,7 @@ fn visual_line_starts(buffer: &Buffer) -> Vec<usize> {
         .collect()
 }
 
-/// Shapes `text` into `rect` in the case its style shows it in (see [`renderer_core::TextCase`]), clamped as [`make_cased_buffer`] clamps it.
+/// Shapes `text` into `rect` as it is shown (see [`shown`]), clamped as [`make_cased_buffer`] clamps it.
 fn make_buffer(
     font_system: &mut FontSystem,
     family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
@@ -336,8 +436,8 @@ fn make_buffer(
     spans: Option<&[Span]>,
     rect: Rect,
     style: &TextStyle,
-) -> Buffer {
-    let cased = renderer_core::case_text(text, spans, style);
+) -> Laid {
+    let cased = shown(text, spans, style);
     make_cased_buffer(
         font_system,
         family_availability,
@@ -356,15 +456,15 @@ fn make_cased_buffer(
     spans: Option<&[Span]>,
     rect: Rect,
     style: &TextStyle,
-) -> Buffer {
-    let buffer = shape_buffer(font_system, family_availability, text, spans, rect, style);
+) -> Laid {
+    let laid = shape_buffer(font_system, family_availability, text, spans, rect, style);
     let Some(clamp) = style.clamp else {
-        return buffer;
+        return laid;
     };
-    let line_starts = visual_line_starts(&buffer);
+    let line_starts = visual_line_starts(&laid.buffer);
     let max = clamp.max_lines();
     if line_starts.len() <= max {
-        return buffer;
+        return laid;
     }
     let cut = line_starts[max].min(text.len());
     let head = text[..cut].trim_end();
@@ -392,7 +492,7 @@ fn make_cased_buffer(
             rect,
             style,
         );
-        if b.layout_runs().count() <= max {
+        if b.buffer.layout_runs().count() <= max {
             return b;
         }
         if end == 0 {

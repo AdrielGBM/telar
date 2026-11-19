@@ -125,6 +125,15 @@ cased labels and a cased paragraph out through both engines. See
 [docs/text-case-and-underline.md](https://github.com/AdrielGBM/telar/blob/main/docs/text-case-and-underline.md)
 and [docs/backdrop-blur.md](https://github.com/AdrielGBM/telar/blob/main/docs/backdrop-blur.md).
 
+## Ruby
+
+A span with a reading is written as `<ruby>` (`white-space: nowrap`, so its base never breaks) with the reading
+in an `<rt>` between `<rp>` parentheses; `src/runs.test.rs` checks that markup and the size and tightening the
+reading is fitted to. The canvas measurer keeps each base on one line, widens it by what its reading could not be
+fitted into, and grows a line by what of the reading its half-leading cannot hold, as a browser lays `<ruby>` out.
+No browser test holds that room against the page yet. See
+[docs/ruby.md](https://github.com/AdrielGBM/telar/blob/main/docs/ruby.md).
+
 ## One document, two writers
 
 What a frame says the document is — which elements, in which order, with which attributes, CSS and SVG — is

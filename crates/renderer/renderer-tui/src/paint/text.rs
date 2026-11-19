@@ -22,7 +22,7 @@ impl Painter<'_> {
         if cells.is_empty() {
             return;
         }
-        let cased = renderer_core::case_text(text, spans, style);
+        let cased = crate::metrics::shown(text, spans, style);
         let (text, spans) = (cased.text.as_ref(), cased.spans.as_deref());
         let cols = cells.cols();
 

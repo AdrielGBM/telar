@@ -32,6 +32,10 @@ impl Surface for Fixed {
     fn root_font_size(&mut self) -> f32 {
         DEFAULT_ROOT_FONT_SIZE
     }
+
+    fn text_width(&mut self, text: &str, style: &TextStyle) -> f32 {
+        text.chars().count() as f32 * style.font_size
+    }
 }
 
 fn open(id: u64, semantics: Semantics) -> DrawCommand {
@@ -1233,6 +1237,10 @@ impl Surface for Offset {
 
     fn root_font_size(&mut self) -> f32 {
         DEFAULT_ROOT_FONT_SIZE
+    }
+
+    fn text_width(&mut self, text: &str, style: &TextStyle) -> f32 {
+        text.chars().count() as f32 * style.font_size
     }
 }
 

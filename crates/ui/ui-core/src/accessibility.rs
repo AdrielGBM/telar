@@ -1117,10 +1117,15 @@ impl Reading {
                     if !in_control && clipped_away.last().copied().unwrap_or(false) {
                         return;
                     }
+                    // A reading set above its base is read after it, so a reader hears both, as a target with no room above a base writes them.
+                    let read = renderer_core::CasedText::as_written(text, spans.as_deref())
+                        .with_readings_inline()
+                        .text
+                        .into_owned();
                     match titled.filter(|_| !in_control) {
-                        Some(title) => reading.titled[title].words.push((at, text.to_string())),
+                        Some(title) => reading.titled[title].words.push((at, read)),
                         None => reading.text.push(Piece {
-                            text: text.to_string(),
+                            text: read,
                             rect: placed,
                             role: Role::Label,
                             lang: scope.lang.clone(),
@@ -1138,8 +1143,12 @@ impl Reading {
                         ) else {
                             continue;
                         };
+                        let words = match &span.ruby {
+                            Some(ruby) => renderer_core::ruby_inline(words, ruby),
+                            None => words.to_string(),
+                        };
                         reading.text.push(Piece {
-                            text: words.to_string(),
+                            text: words,
                             rect: placed,
                             role: Role::Link(Link::to(link.clone())),
                             lang: scope.lang.clone(),

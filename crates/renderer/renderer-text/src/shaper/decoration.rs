@@ -4,7 +4,7 @@ use cosmic_text::{LayoutGlyph, fontdb};
 use geometry_core::Rect;
 use renderer_core::{DecorationLine, Paint, Span, TextStyle};
 
-use super::{TextShaper, make_cased_buffer, styled_runs};
+use super::{TextShaper, make_cased_buffer, shown, styled_runs};
 
 /// One line drawn along a stretch of glyphs: where it lies, in the coordinates of the rect the text was laid into, and its paint.
 #[derive(Debug, Clone, PartialEq)]
@@ -50,16 +50,16 @@ impl TextShaper {
             return Vec::new();
         }
         self.sync_fonts();
-        let cased = renderer_core::case_text(text, spans, style);
+        let cased = shown(text, spans, style);
         let run_styles: Vec<TextStyle> = match cased.spans.as_deref() {
             Some(spans) => styled_runs(&cased.text, spans, style)
                 .into_iter()
-                .map(|(_, run_style)| run_style)
+                .map(|run| run.style)
                 .collect(),
             None => Vec::new(),
         };
         let shift = self.baseline_shift(style) as f32;
-        let buffer = make_cased_buffer(
+        let laid = make_cased_buffer(
             &mut self.font_system,
             &mut self.family_availability,
             &cased.text,
@@ -67,13 +67,15 @@ impl TextShaper {
             rect,
             style,
         );
+        let lifts = self.lifts(&laid, style);
         let mut stretches: Vec<(f32, Vec<LayoutGlyph>)> = Vec::new();
-        for run in buffer.layout_runs() {
+        for (line, run) in laid.buffer.layout_runs().enumerate() {
+            let drop = lifts.get(line).map_or(0.0, |lift| lift.drop);
             for stretch in run.glyphs.chunk_by(|a, b| a.metadata == b.metadata) {
-                stretches.push((run.line_y + shift, stretch.to_vec()));
+                stretches.push((run.line_y + shift + drop, stretch.to_vec()));
             }
         }
-        drop(buffer);
+        drop(laid);
 
         let mut strokes = Vec::new();
         for (baseline, glyphs) in stretches {

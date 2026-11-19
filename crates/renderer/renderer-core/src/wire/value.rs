@@ -11,8 +11,8 @@ use crate::{
     DecorationMetric, Editing, Element, FillRule, FontFamily, FontFeatures, FontStyle, FontTag,
     FontVariations, Gradient, GradientKind, GradientStops, ImageFill, ImageSlice, LayerMask,
     LineCap, LineHeight, LineJoin, Linked, Paint, PathData, PathStyle, PathVerb, Picture,
-    PictureFit, Raster, RectStyle, Shadow, Span, Stroke, TextAlign, TextCase, TextDecoration,
-    TextLength, TextShadow, TextStyle, TextWrap,
+    PictureFit, Raster, RectStyle, RubyStyle, Shadow, Span, Stroke, TextAlign, TextCase,
+    TextDecoration, TextLength, TextShadow, TextStyle, TextWrap,
 };
 
 wire_enum!(TextAlign {
@@ -181,7 +181,9 @@ wire_struct!(TextStyle {
     text_case,
     decoration,
     lang,
+    ruby,
 });
+wire_struct!(RubyStyle { size, min_size });
 wire_struct!(Declared {
     font_family,
     font_size,
@@ -206,10 +208,16 @@ wire_struct!(Declared {
 impl Shaped for Span {
     const SHAPE: u64 = fold_shape(
         fold(
-            fold_fields!(shape_named("Span"), Span { range, over }),
-            b"link",
+            fold_shape(
+                fold(
+                    fold_fields!(shape_named("Span"), Span { range, over }),
+                    b"link",
+                ),
+                LINK_SHAPE,
+            ),
+            b"ruby",
         ),
-        LINK_SHAPE,
+        <Option<std::sync::Arc<str>>>::SHAPE,
     );
 }
 
@@ -218,12 +226,14 @@ impl Wire for Span {
         self.range.put(w);
         self.over.put(w);
         put_link(w, self.link.as_ref());
+        self.ruby.put(w);
     }
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         Ok(Span {
             range: Wire::take(r)?,
             over: Wire::take(r)?,
             link: take_link(r)?,
+            ruby: Wire::take(r)?,
         })
     }
 }

@@ -384,6 +384,21 @@ fn length(length: renderer_core::TextLength) -> String {
     }
 }
 
+/// What a reading's `<rt>` declares: the size `fit` set it in, in `em` of its base, which is set in `base_size`; one line box no taller than that size, so the room it takes over its base is its size and not the face's own leading; and the tightening its letters close up by.
+pub fn reading_style(fit: &renderer_core::RubyFit, base_size: f32, out: &mut String) {
+    if base_size > 0.0 {
+        declare(
+            out,
+            "font-size",
+            &format!("{}em", round(fit.size / base_size)),
+        );
+    }
+    declare(out, "line-height", "1");
+    if fit.tightening > 0.0 {
+        declare(out, "letter-spacing", &px(-fit.tightening));
+    }
+}
+
 /// The declarations a run of a paragraph adds over the paragraph: only what its span says, since everything else it inherits from the element around it. A size in pixels is in `rem` of a root of `root_font_size`, as [`text_style`] writes the paragraph's.
 pub fn span_style(over: &renderer_core::Declared, root_font_size: f32, out: &mut String) {
     match over.font_size {

@@ -2134,3 +2134,39 @@ fn a_progress_bar_with_no_name_and_no_reading_is_still_read_as_one() {
     let nodes = snapshot_of(root);
     assert_eq!(held(&nodes, None), [(Role::ProgressBar, "")]);
 }
+
+/// A reading set above its base is heard after it, in the paragraph and in the name of a link it sits on.
+#[test]
+fn a_reader_hears_each_base_with_its_reading() {
+    reset_layout_runtime();
+    focus::clear();
+    let line = Text::runs(
+        vec![
+            crate::text::TextRun::new(|| "漢字".to_string()).ruby(|| "かんじ".to_string()),
+            crate::text::TextRun::new(|| "を".to_string()),
+            crate::text::TextRun::new(|| "読む".to_string())
+                .ruby(|| Some("よ".to_string()))
+                .to(|| platform_core::Location::root().segment("yomu")),
+        ],
+        LayoutStyle::new().width(300.0),
+        |style| style,
+    )
+    .unwrap();
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(line)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    assert!(
+        read_on_its_own(&nodes, "漢字(かんじ)を読む(よ)"),
+        "{:?}",
+        nodes.iter().map(|n| n.name.as_str()).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        names_of(
+            &nodes,
+            Role::Link(Link::to(
+                platform_core::Location::root().segment("yomu").into()
+            ))
+        ),
+        ["読む(よ)"]
+    );
+}

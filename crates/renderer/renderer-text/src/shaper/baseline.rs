@@ -6,7 +6,7 @@ use geometry_core::Rect;
 use renderer_core::TextStyle;
 
 use super::cache::text_style_bits;
-use super::{TextShaper, effective_line_height, physical_glyph, shape_buffer};
+use super::{TextShaper, build_buffer, effective_line_height, physical_glyph};
 
 /// The Latin letters that reach furthest above and below the baseline: ascenders, which stand at or above the capitals, and descenders.
 const REACH: &str = "bdfghjklpqy";
@@ -41,13 +41,14 @@ impl TextShaper {
             width: REACH_WIDTH,
             height: effective_line_height(style),
         };
-        let buffer = shape_buffer(
+        let buffer = build_buffer(
             &mut self.font_system,
             &mut self.family_availability,
             REACH,
             None,
             rect,
             style,
+            &[],
         );
         let run = buffer.layout_runs().next()?;
         let baseline = run.line_y - run.line_top;

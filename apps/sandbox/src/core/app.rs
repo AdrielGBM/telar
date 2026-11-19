@@ -108,6 +108,12 @@ const SECTIONS: &[SectionDef] = sections![
         "text_case.rsx"
     ),
     (
+        "Ruby",
+        crate::features::ruby::ruby,
+        crate::features::ruby::RubyProps,
+        "ruby.rsx"
+    ),
+    (
         "Color & theme",
         crate::features::color::color,
         crate::features::color::ColorProps,

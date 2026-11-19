@@ -18,12 +18,26 @@ use crate::layout_leaf::LayoutLeaf;
 use crate::surface_context::HomeSurface;
 use crate::text_fit::Fitting;
 
-/// What a text was last measured from: its string, its declared style, and the fit it asked for with the surface that fit read.
+/// What a text was last measured from: its string, its declared style, what of its spans changes its extent, and the fit it asked for with the surface that fit read.
 type Measured = (
     String,
     TextStyle,
+    Option<Vec<Span>>,
     Option<(renderer_core::FontFit, geometry_core::Size)>,
 );
+
+/// `span` with only what changes the room its paragraph takes: its range, what it declares but its paints, and its reading. A link or a hover recolouring a run repaints it without measuring it again.
+fn extent_of(span: Span) -> Span {
+    Span {
+        over: renderer_core::Declared {
+            color: None,
+            decoration_color: None,
+            ..span.over
+        },
+        link: None,
+        ..span
+    }
+}
 
 /// The measured text leaf, optically centred in the box its parent gave it.
 pub struct Text {
@@ -40,11 +54,12 @@ pub struct Text {
     link_cursor: Option<crate::cursor::CursorClaim>,
 }
 
-/// One run of a paragraph built with [`Text::runs`]: its string, what it declares over the paragraph's style, and where it links.
+/// One run of a paragraph built with [`Text::runs`]: its string, what it declares over the paragraph's style, where it links, and the reading set above it.
 pub struct TextRun {
     content: Rc<dyn Fn() -> String>,
     over: Option<Rc<dyn Fn() -> renderer_core::Declared>>,
     link: Option<Rc<dyn Fn() -> Option<platform_core::Destination>>>,
+    ruby: Option<Rc<dyn Fn() -> Option<String>>>,
 }
 
 impl TextRun {
@@ -53,6 +68,7 @@ impl TextRun {
             content: Rc::new(content),
             over: None,
             link: None,
+            ruby: None,
         }
     }
 
@@ -69,6 +85,35 @@ impl TextRun {
     ) -> Self {
         self.link = Some(Rc::new(move || destination().into_destination()));
         self
+    }
+
+    /// Sets `reading` above the run, its ruby, re-read when what it reads changes: the run is its base and stays on one line, and a screen reader hears the base and then its reading. A string, or an `Option` of one for a reading shown only sometimes (see [`IntoRubyReading`]). The paragraph's [`RubyStyle`](renderer_core::RubyStyle) sizes it.
+    pub fn ruby<R: IntoRubyReading>(mut self, reading: impl Fn() -> R + 'static) -> Self {
+        self.ruby = Some(Rc::new(move || reading().into_ruby_reading()));
+        self
+    }
+}
+
+/// What a run's reading is written as ([`TextRun::ruby`]): a string, or an `Option` of one, `None` setting no reading.
+pub trait IntoRubyReading {
+    fn into_ruby_reading(self) -> Option<String>;
+}
+
+impl IntoRubyReading for String {
+    fn into_ruby_reading(self) -> Option<String> {
+        Some(self)
+    }
+}
+
+impl IntoRubyReading for &str {
+    fn into_ruby_reading(self) -> Option<String> {
+        Some(self.to_owned())
+    }
+}
+
+impl<R: IntoRubyReading> IntoRubyReading for Option<R> {
+    fn into_ruby_reading(self) -> Option<String> {
+        self.and_then(IntoRubyReading::into_ruby_reading)
     }
 }
 
@@ -207,12 +252,13 @@ impl Text {
             for run in runs.iter() {
                 let start = at;
                 at += (run.content)().len() as u32;
-                if run.over.is_none() && run.link.is_none() {
+                if run.over.is_none() && run.link.is_none() && run.ruby.is_none() {
                     continue;
                 }
                 let over = run.over.as_ref().map(|over| over()).unwrap_or_default();
                 let mut span = Span::new(start..at, over);
                 span.link = run.link.as_ref().and_then(|link| link());
+                span.ruby = run.ruby.as_ref().and_then(|ruby| ruby()).map(Into::into);
                 spans.push(span);
             }
             spans
@@ -331,20 +377,28 @@ impl Text {
         // Reads what the measure reads, so it subscribes to exactly what the measure depends on, and compares before dirtying: a signal re-set to its own value, or a colour change, would otherwise cost a shaping pass and a relayout for nothing.
         let dirty_content = Rc::clone(&content_fn);
         let dirty_style = Rc::clone(&declared);
+        let dirty_spans = spans_fn.clone();
         let dirty_fit = fitting;
         let measured = RefCell::new(Option::<Measured>::None);
         effect(move || {
             let next = (
                 (dirty_content)(),
                 (dirty_style)(),
+                dirty_spans
+                    .as_ref()
+                    .map(|spans| spans().into_iter().map(extent_of).collect()),
                 dirty_fit.as_ref().map(|fitting| fitting.watched()),
             );
-            let unchanged = measured
-                .borrow()
-                .as_ref()
-                .is_some_and(|(content, style, fit)| {
-                    *content == next.0 && style.same_extent(&next.1) && *fit == next.2
-                });
+            let unchanged =
+                measured
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|(content, style, spans, fit)| {
+                        *content == next.0
+                            && style.same_extent(&next.1)
+                            && *spans == next.2
+                            && *fit == next.3
+                    });
             if unchanged {
                 return;
             }
@@ -395,9 +449,9 @@ impl Text {
         }
     }
 
-    /// Where the text sits inside a box `r`, as `(top, height)`: its whole line box drawn, with the cap band of its style centred in the box (see [`CapBandCache::top_in`]).
-    fn placed(&self, r: Rect, text: &str, style: &TextStyle) -> (f32, f32) {
-        let (_, text_height) = crate::text_metrics::measure_text(text, None, r.width, style);
+    /// Where the text sits inside a box `r`, as `(top, height)`: its whole line box drawn, its spans and the room their readings take included, with the cap band of its style centred in the box (see [`CapBandCache::top_in`]).
+    fn placed(&self, r: Rect, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+        let (_, text_height) = crate::text_metrics::measure_text(text, spans, r.width, style);
         (
             self.cap_band.top_in(r.height, text_height, style),
             text_height,
@@ -416,7 +470,7 @@ impl Text {
         }
         let text = (self.content)();
         let style = (self.style)();
-        let (top, _) = self.placed(r, &text, &style);
+        let (top, _) = self.placed(r, &text, Some(&spans), &style);
         let index = crate::text_metrics::text_index_at(
             &text,
             Some(&spans),
@@ -513,9 +567,9 @@ impl Component for Text {
             }
         };
         let style = (self.style)();
-        let (y, line_height) = self.placed(r, &text, &style);
         let spans: Option<std::sync::Arc<[Span]>> =
             self.spans.as_ref().map(|f| std::sync::Arc::from(f()));
+        let (y, line_height) = self.placed(r, &text, spans.as_deref(), &style);
         self.leaf.at_layout_position(RenderNode::spanned_text(
             text,
             spans.unwrap_or_else(|| std::sync::Arc::from([].as_slice())),
@@ -547,3 +601,7 @@ mod tests;
 #[cfg(test)]
 #[path = "text.cell.test.rs"]
 mod cell_tests;
+
+#[cfg(test)]
+#[path = "text.ruby.test.rs"]
+mod ruby_tests;

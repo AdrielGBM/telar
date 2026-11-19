@@ -72,7 +72,7 @@ pub struct CasedText<'a> {
     pub text: Cow<'a, str>,
     pub spans: Option<Cow<'a, [Span]>>,
     /// Each stretch of the shown text and the stretch of the written one it came from, in order; empty when the two are the same bytes.
-    pieces: Vec<(Range<usize>, Range<usize>)>,
+    pub(super) pieces: Vec<(Range<usize>, Range<usize>)>,
 }
 
 impl CasedText<'_> {
@@ -94,6 +94,27 @@ impl CasedText<'_> {
                     }
                 },
             )
+    }
+
+    /// The bytes of the written text the shown bytes `shown` came from: exact where nothing was rewritten, the whole of each rewritten stretch it touches where something was.
+    pub(super) fn written(&self, shown: Range<usize>) -> Range<usize> {
+        let start = self.source_index(shown.start);
+        if shown.is_empty() || self.pieces.is_empty() {
+            return start..start + shown.len();
+        }
+        let last = shown.end - 1;
+        let end = self
+            .pieces
+            .iter()
+            .find(|(piece, _)| piece.contains(&last))
+            .map_or(start, |(piece, written)| {
+                if piece.len() == written.len() {
+                    written.start + (shown.end - piece.start)
+                } else {
+                    written.end
+                }
+            });
+        start..end.max(start)
     }
 }
 

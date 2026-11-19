@@ -148,6 +148,18 @@ impl ViewGen<'_> {
                     self.owning(&[value], &format!("move || {read}"))
                 );
             }
+            if let Some(ruby) = span_attrs.iter().find(|a| a.key == "ruby") {
+                let reading = match &ruby.value {
+                    Value::Quoted(text) => self.text_closure(text, ruby.value_start),
+                    value => {
+                        let value = value.text().trim();
+                        let inner = super::redundant_parens(value).unwrap_or(value);
+                        let read = super::signals::substitute_reads(inner, self.theme_access);
+                        self.owning(&[value], &format!("move || {read}"))
+                    }
+                };
+                let _ = write!(run, ".ruby({reading})");
+            }
             runs.push(run);
         }
 

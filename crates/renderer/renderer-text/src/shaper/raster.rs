@@ -2,44 +2,32 @@
 
 use super::TextShaper;
 use super::cache::{make_text_cache_key, text_style_bits};
+use super::ruby::Laid;
 use super::{make_buffer, physical_glyph, resolve_coverage};
-use cosmic_text::{Buffer, Color as CosmicColor};
+use cosmic_text::Color as CosmicColor;
 use geometry_core::Rect;
-use renderer_core::{Raster, Span, TextStyle, premultiply_rgba};
+use renderer_core::{Span, TextStyle, premultiply_rgba};
 use std::sync::Arc;
 
 impl TextShaper {
-    /// Walks a shaped buffer's glyphs in `style`, handing each covered pixel to `callback` as `(x, y, w, h, color)` — the same shape [`Buffer::draw`] uses, and delegating to it outright for the smooth raster so that path stays byte-identical, moved down by the [`baseline_shift`](Self::baseline_shift) it does not know about.
-    ///
-    /// The pixel raster needs its own walk because the two things it changes both live inside that call: where a glyph's origin is rounded, and what its coverage resolves to. Text decorations are not reproduced here — no `TextStyle` axis sets any, so a shaped buffer never carries one.
+    /// Walks a laid paragraph's glyphs in `style`, readings included, handing each covered pixel to `callback` as `(x, y, w, h, color)`: placed on the grid `style.raster` asks for and moved down by the [`baseline_shift`](Self::baseline_shift) cosmic-text does not know about, with each pixel's coverage resolved as that raster resolves it. Text decorations are drawn apart, from [`decorations`](Self::decorations).
     fn draw_buffer(
         &mut self,
-        buffer: &mut Buffer,
+        laid: &Laid,
         default: CosmicColor,
         style: &TextStyle,
         mut callback: impl FnMut(i32, i32, u32, u32, CosmicColor),
     ) {
         let raster = style.raster;
-        let shift = self.baseline_shift(style);
-        if raster == Raster::Smooth {
-            buffer.draw(
-                &mut self.font_system,
-                &mut self.swash_cache,
-                default,
-                |x, y, w, h, color| callback(x, y + shift, w, h, color),
-            );
-            return;
-        }
-        buffer.shape_until_scroll(&mut self.font_system, false);
-        let placed: Vec<(cosmic_text::PhysicalGlyph, CosmicColor)> = buffer
-            .layout_runs()
-            .flat_map(|run| {
-                run.glyphs.iter().map(move |glyph| {
-                    (
-                        physical_glyph(glyph, (0., run.line_y), 1.0, raster),
-                        glyph.color_opt.unwrap_or(default),
-                    )
-                })
+        let shift = self.baseline_shift(style) as f32;
+        let placed: Vec<(cosmic_text::PhysicalGlyph, CosmicColor)> = laid
+            .placed_glyphs(shift)
+            .iter()
+            .map(|(glyph, baseline)| {
+                (
+                    physical_glyph(glyph, (0., *baseline), 1.0, raster),
+                    glyph.color_opt.unwrap_or(default),
+                )
             })
             .collect();
         for (physical, color) in placed {
@@ -54,7 +42,7 @@ impl TextShaper {
                         pixel.b(),
                         resolve_coverage(pixel.a(), raster),
                     );
-                    callback(physical.x + x, physical.y + shift + y, 1, 1, covered);
+                    callback(physical.x + x, physical.y + y, 1, 1, covered);
                 },
             );
         }
@@ -100,7 +88,7 @@ impl TextShaper {
         let [r, g, b, a] = rgba;
         let cosmic_color = CosmicColor::rgba(r, g, b, a);
 
-        let mut buffer = make_buffer(
+        let laid = make_buffer(
             &mut self.font_system,
             &mut self.family_availability,
             text,
@@ -110,7 +98,7 @@ impl TextShaper {
         );
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
-        self.draw_buffer(&mut buffer, cosmic_color, style, |bx, by, bw, bh, color| {
+        self.draw_buffer(&laid, cosmic_color, style, |bx, by, bw, bh, color| {
             let col_start = ((-bx).max(0)) as usize;
             let col_end = ((width as i32 - bx).max(0) as usize).min(bw as usize);
             let row_start = ((-by).max(0)) as usize;
@@ -162,7 +150,7 @@ impl TextShaper {
 
         let white = CosmicColor::rgba(255, 255, 255, 255);
 
-        let mut buffer = make_buffer(
+        let laid = make_buffer(
             &mut self.font_system,
             &mut self.family_availability,
             text,
@@ -172,7 +160,7 @@ impl TextShaper {
         );
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
-        self.draw_buffer(&mut buffer, white, style, |bx, by, bw, bh, color| {
+        self.draw_buffer(&laid, white, style, |bx, by, bw, bh, color| {
             let col_start = ((-bx).max(0)) as usize;
             let col_end = ((width as i32 - bx).max(0) as usize).min(bw as usize);
             let row_start = ((-by).max(0)) as usize;

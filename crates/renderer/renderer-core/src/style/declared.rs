@@ -257,6 +257,8 @@ pub struct Span {
     pub over: Declared,
     /// Where the range takes the reader when activated: a link inside a paragraph. Each target makes it one its own way, as it does for a box (see `Destination`).
     pub link: Option<semantics_core::Destination>,
+    /// The reading set above the range, its ruby: the range is the reading's base and stays on one line, and the paragraph's [`RubyStyle`](super::RubyStyle) sizes the reading.
+    pub ruby: Option<std::sync::Arc<str>>,
 }
 
 impl Span {
@@ -265,12 +267,19 @@ impl Span {
             range,
             over,
             link: None,
+            ruby: None,
         }
     }
 
     /// This range as a link to `destination`.
     pub fn linking_to(mut self, destination: semantics_core::Destination) -> Self {
         self.link = Some(destination);
+        self
+    }
+
+    /// This range as the base of `reading`.
+    pub fn with_ruby(mut self, reading: impl Into<std::sync::Arc<str>>) -> Self {
+        self.ruby = Some(reading.into());
         self
     }
 }

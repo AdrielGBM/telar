@@ -123,6 +123,11 @@ impl Surface for PageAtRest {
     fn root_font_size(&mut self) -> f32 {
         crate::document::DEFAULT_ROOT_FONT_SIZE
     }
+
+    /// Nothing measures a page written ahead of time, so its readings are set at their own size until the browser takes the page over.
+    fn text_width(&mut self, _text: &str, _style: &TextStyle) -> f32 {
+        0.0
+    }
 }
 
 fn write_box(out: &mut String, node: &BoxNode) {
@@ -213,9 +218,13 @@ fn write_paint(out: &mut String, node: &PaintNode, owner: Option<BoxKey>, presen
 }
 
 fn write_runs(out: &mut String, runs: &[Run], owner: BoxKey) {
+    let content = |out: &mut String, run: &Run| match &run.ruby {
+        Some(ruby) => crate::runs::ruby_markup(out, &run.text, ruby),
+        None => out.push_str(&escape_html(&run.text)),
+    };
     for run in runs {
         match (&run.link, run.css.is_empty()) {
-            (None, true) => out.push_str(&escape_html(&run.text)),
+            (None, true) => content(out, run),
             (link, _) => {
                 let tag = if link.is_some() { "a" } else { "span" };
                 let _ = write!(out, "<{tag}");
@@ -234,7 +243,7 @@ fn write_runs(out: &mut String, runs: &[Run], owner: BoxKey) {
                     attribute(out, RUN_ATTRIBUTE, &link.run.to_string());
                 }
                 out.push('>');
-                out.push_str(&escape_html(&run.text));
+                content(out, run);
                 let _ = write!(out, "</{tag}>");
             }
         }

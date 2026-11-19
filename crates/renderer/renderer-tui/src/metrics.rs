@@ -6,6 +6,15 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::wrap::{WrapConfig, WrappedLine, grapheme_cols, line_cols, wrap};
 
+/// The paragraph as a terminal shows it: in the case its style shows it in, with each reading written after its base in parentheses, since a cell has no room above a letter to set one in (see [`renderer_core::CasedText::with_readings_inline`]). What every measure and the painter work from, so the cells laid out are the cells drawn.
+pub(crate) fn shown<'a>(
+    text: &'a str,
+    spans: Option<&'a [Span]>,
+    style: &TextStyle,
+) -> renderer_core::CasedText<'a> {
+    case_text(text, spans, style).with_readings_inline()
+}
+
 /// The column a line `width` columns wide starts at in a box `cols` wide, as `align` places it.
 pub(crate) fn align_cols(align: TextAlign, cols: u16, width: u16) -> u16 {
     match align {
@@ -74,11 +83,11 @@ impl TextMetrics for CellMetrics {
         max_width: f32,
         style: &TextStyle,
     ) -> (f32, f32) {
-        self.extent(&case_text(text, spans, style).text, max_width, style)
+        self.extent(&shown(text, spans, style).text, max_width, style)
     }
 
     fn min_content(&self, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
-        let cased = case_text(text, spans, style);
+        let cased = shown(text, spans, style);
         let text = cased.text.as_ref();
         let widest = text.split_whitespace().map(line_cols).max().unwrap_or(0);
         self.extent(text, f32::from(widest) * self.cell.width(), style)
@@ -100,7 +109,7 @@ impl TextMetrics for CellMetrics {
         max_width: f32,
         style: &TextStyle,
     ) -> Vec<TextLine> {
-        let cased = case_text(text, spans, style);
+        let cased = shown(text, spans, style);
         let config = WrapConfig {
             max_lines: None,
             ..self.config(max_width, style)
@@ -140,7 +149,7 @@ impl TextMetrics for CellMetrics {
         if x < 0.0 || y < 0.0 {
             return None;
         }
-        let cased = case_text(text, spans, style);
+        let cased = shown(text, spans, style);
         let text = cased.text.as_ref();
         let mut lines = Vec::new();
         self.lines(text, max_width, style, &mut lines);

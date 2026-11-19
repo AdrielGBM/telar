@@ -168,3 +168,32 @@ fn a_cluster_wider_than_the_box_overflows_its_line_whole() {
         "the cluster is wider than the box it overflows"
     );
 }
+
+fn reading(range: std::ops::Range<u32>, reading: &str) -> Span {
+    Span::new(range, renderer_core::Declared::default()).with_ruby(reading)
+}
+
+#[test]
+fn a_reading_takes_the_cells_it_is_written_in_after_its_base() {
+    let spans = [reading(0..6, "かんじ")];
+    let (w, h) = metrics().measure("漢字を", Some(&spans), 1000.0, &style());
+    assert_eq!(w, f32::from(line_cols("漢字(かんじ)を")) * 8.0);
+    assert_eq!(h, 16.0, "a terminal grows no line for it");
+}
+
+#[test]
+fn a_press_on_a_written_reading_answers_with_its_base() {
+    let spans = [reading(0..6, "かんじ")];
+    let reading_col = f32::from(line_cols("漢字(")) * 8.0;
+    let at = metrics().index_at(
+        "漢字を",
+        Some(&spans),
+        1000.0,
+        &style(),
+        (reading_col + 1.0, 1.0),
+    );
+    assert_eq!(at, Some(0));
+    let after = f32::from(line_cols("漢字(かんじ)")) * 8.0;
+    let at = metrics().index_at("漢字を", Some(&spans), 1000.0, &style(), (after + 1.0, 1.0));
+    assert_eq!(at, Some(6));
+}

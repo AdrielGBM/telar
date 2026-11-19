@@ -64,9 +64,10 @@ pub use style::{
     Border, BorderKind, CasedText, Clamp, Dash, Declared, DecorationLength, DecorationLine,
     DecorationMetric, FillRule, FitWidth, FontFamily, FontFeatures, FontFit, FontStyle, FontTag,
     FontVariations, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineHeight,
-    LineJoin, Paint, PathStyle, Raster, RectStyle, ResolvedGradient, Scale, Segment, Shadow,
-    ShapeStyle, Span, Stroke, TextAlign, TextCase, TextDecoration, TextLength, TextShadow,
-    TextStyle, TextWrap, border_inner_shape, case_text, css_string, link_at, span_segments,
+    LineJoin, Paint, PathStyle, Raster, RectStyle, ResolvedGradient, RubyFit, RubyStyle, Scale,
+    Segment, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextCase, TextDecoration, TextLength,
+    TextShadow, TextStyle, TextWrap, WORD_JOINER, border_inner_shape, case_text, css_string,
+    link_at, ruby_inline, span_segments,
 };
 pub use style_pool::{hash_declared, hash_path_style};
 pub use text_lines::{PlacedGlyph, TextCluster, TextLine};

@@ -38,6 +38,7 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                         span.range.hash(h);
                         hash_declared(&span.over).hash(h);
                         span.link.hash(h);
+                        span.ruby.hash(h);
                     }
                 }
                 rect.x.to_bits().hash(h);

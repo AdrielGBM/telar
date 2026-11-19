@@ -888,11 +888,14 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
             specs.extend_from_slice(TEXT_ONLY_ATTRS);
             specs
         }
-        // A run of a paragraph: the text properties it restyles itself with, and where it links. It is laid out as part of its `text`, so it takes no layout keys.
+        // A run of a paragraph: the text properties it restyles itself with, where it links and the reading set above it. It is laid out as part of its `text`, so it takes no layout keys.
         "span" => {
             let mut specs = INHERITABLE_TEXT_ATTRS.to_vec();
             specs.push(AttrSpec::free("to").doc(
                 "Makes the run a link inside its paragraph: a typed route, `anchor(\"name\")` or `external(\"https://…\")`. An `<a href>` in a document; followed on a tap elsewhere.",
+            ));
+            specs.push(AttrSpec::free("ruby").doc(
+                "Sets a reading above the run, its ruby (furigana): `\"かんじ\"`, interpolating `{…}`, or an expression that is a `String` or an `Option<String>`, re-read when the `$` values it reads change. The run stays on one line, its line grows to hold the reading, and a screen reader hears the reading after the run. A terminal writes it after the run in parentheses.",
             ));
             specs
         }

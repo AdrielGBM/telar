@@ -6,8 +6,8 @@ use rustc_hash::FxHasher;
 
 use crate::{
     Border, BorderRadius, Declared, DecorationLength, DecorationMetric, FillRule, FontFamily,
-    FontStyle, Gradient, GradientKind, LineHeight, Paint, PathStyle, Raster, RectStyle, Shadow,
-    Stroke, TextCase, TextDecoration, TextShadow, TextStyle, TextWrap,
+    FontStyle, Gradient, GradientKind, LineHeight, Paint, PathStyle, Raster, RectStyle, RubyStyle,
+    Shadow, Stroke, TextCase, TextDecoration, TextShadow, TextStyle, TextWrap,
 };
 
 // Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`; each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
@@ -58,6 +58,10 @@ pub fn hash_text_style(s: &TextStyle) -> u64 {
     }
     if s.decoration != TextDecoration::default() {
         hash_decoration(&s.decoration, &mut h);
+    }
+    if s.ruby != RubyStyle::default() {
+        h.write_u32(s.ruby.size.to_bits());
+        h.write_u32(s.ruby.min_size.to_bits());
     }
     h.finish()
 }

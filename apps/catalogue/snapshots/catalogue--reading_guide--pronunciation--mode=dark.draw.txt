@@ -1,0 +1,31 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          rect 16,16 649x187 fill=#1c1f29ff
+          element group
+            matrix 1,0,0,1,40,40
+              text 0,0 601.34x45.6 "The colonel led the choir home." size=28 family=sans-serif weight=400 color=#ebedf5ff lang=en span=4..11[] span=20..25[]
+            end
+          end
+          element group
+            matrix 1,0,0,1,40,102
+              text 0,0 601.34x29.6 "A reading far wider than its base: I shrink it, close it up, then widen." size=18 family=sans-serif weight=400 color=#99a1b8ff lang=en span=35..36[]
+            end
+          end
+          element button
+            rect 40,147 130x32 fill=#627ed9ff radius=10
+            element group
+              matrix 1,0,0,1,52,147
+                text 0,8 106.42x16.8 "Toggle readings" size=14 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
