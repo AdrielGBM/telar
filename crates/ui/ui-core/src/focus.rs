@@ -197,6 +197,12 @@ struct FocusState {
     traps: Vec<ScopeId>,
     // Whether each control asked about holds focus, as a signal of its own with the owner it lives in. See [`is_focused`].
     holding: FxHashMap<FocusId, (reactive_core::OwnerId, RwSignal<bool>)>,
+    // Whether focus is at or inside each box asked about, as a signal of its own with the owner it lives in. See [`shows_focus_within`].
+    within: FxHashMap<NodeId, (reactive_core::OwnerId, RwSignal<bool>)>,
+    // The boxes in `within` whose signal says focus is inside them now: every one of them is on the focused control's lineage, as it was when focus reached it.
+    inside: Vec<NodeId>,
+    // How many boxes `within` may hold before the ones freed since are dropped from it.
+    within_sweep_at: usize,
     // A set rather than a field on each entry, because it is the minority and the only kind anyone asks about.
     text_entries: FxHashSet<FocusId>,
     // Bumped when a gate or an ownership link is registered, so the guard re-reads an ancestry it could not have subscribed to yet.
@@ -237,6 +243,9 @@ impl FocusState {
             scopes_at: FxHashMap::default(),
             traps: Vec::new(),
             holding: FxHashMap::default(),
+            within: FxHashMap::default(),
+            inside: Vec::new(),
+            within_sweep_at: WITHIN_SWEEP_FLOOR,
             text_entries: FxHashSet::default(),
             reach: signal(0),
             roster: signal(0),
@@ -317,6 +326,26 @@ fn set_focused(new: Option<FocusId>) {
         let of = |id: Option<FocusId>| id.and_then(|id| s.holding.get(&id).map(|(_, held)| *held));
         (of(old), of(new))
     });
+    let lineage: Vec<NodeId> = new
+        .and_then(node_of)
+        .map(|node| crate::input_region::lineage(node).collect())
+        .unwrap_or_default();
+    let (vacated, entered) = with_focus(|s| {
+        let (stays, vacated): (Vec<NodeId>, Vec<NodeId>) = std::mem::take(&mut s.inside)
+            .into_iter()
+            .partition(|node| lineage.contains(node));
+        let entered: Vec<NodeId> = lineage
+            .iter()
+            .copied()
+            .filter(|node| s.within.contains_key(node) && !stays.contains(node))
+            .collect();
+        s.inside = stays.into_iter().chain(entered.iter().copied()).collect();
+        let signal_of = |node: &NodeId| s.within.get(node).map(|(_, inside)| *inside);
+        (
+            vacated.iter().filter_map(signal_of).collect::<Vec<_>>(),
+            entered.iter().filter_map(signal_of).collect::<Vec<_>>(),
+        )
+    });
     reactive_core::batch(|| {
         focused.set(new);
         if let Some(left) = left {
@@ -325,7 +354,76 @@ fn set_focused(new: Option<FocusId>) {
         if let Some(reached) = reached {
             reached.set(true);
         }
+        for inside in vacated {
+            inside.set(false);
+        }
+        for inside in entered {
+            inside.set(true);
+        }
     });
+}
+
+/// How many boxes [`shows_focus_within`] keeps a signal for before it looks for freed ones to drop.
+const WITHIN_SWEEP_FLOOR: usize = 64;
+
+/// The signal saying whether focus is at or inside `node`, made the first time anyone asks and kept until the box is freed.
+fn within(node: NodeId) -> RwSignal<bool> {
+    if let Some((_, inside)) = with_focus_ref(|s| s.within.get(&node).copied()) {
+        return inside;
+    }
+    sweep_within();
+    let holds = focused_signal()
+        .peek()
+        .and_then(node_of)
+        .is_some_and(|at| crate::input_region::is_inside(at, node));
+    // Owned apart from whoever asks first, which may be a view re-run and disposed long before the box is freed.
+    let scope = reactive_core::root_scope();
+    let inside = signal(holds);
+    let owner = scope.id();
+    drop(scope);
+    with_focus(|s| {
+        s.within.insert(node, (owner, inside));
+        if holds {
+            s.inside.push(node);
+        }
+    });
+    inside
+}
+
+/// Drops the signals of freed boxes once there are twice as many as the last sweep left, so asking about a box costs the same however many have come and gone.
+fn sweep_within() {
+    if with_focus_ref(|s| s.within.len() < s.within_sweep_at) {
+        return;
+    }
+    let asked: Vec<NodeId> = with_focus_ref(|s| s.within.keys().copied().collect());
+    let freed: Vec<NodeId> = asked
+        .into_iter()
+        .filter(|&node| layout_reactive::track_layout(node).is_none())
+        .collect();
+    let owners: Vec<reactive_core::OwnerId> = with_focus(|s| {
+        s.inside.retain(|node| !freed.contains(node));
+        let owners = freed
+            .iter()
+            .filter_map(|node| s.within.remove(node).map(|(owner, _)| owner))
+            .collect();
+        s.within_sweep_at = (s.within.len() * 2).max(WITHIN_SWEEP_FLOOR);
+        owners
+    });
+    for owner in owners {
+        reactive_core::dispose_owner(owner);
+    }
+}
+
+/// Frees every signal [`within`] made, for a layout runtime being replaced: the next tree is handed the same box ids.
+fn forget_within() {
+    let owners: Vec<reactive_core::OwnerId> = with_focus(|s| {
+        s.inside.clear();
+        s.within_sweep_at = WITHIN_SWEEP_FLOOR;
+        s.within.drain().map(|(_, (owner, _))| owner).collect()
+    });
+    for owner in owners {
+        reactive_core::dispose_owner(owner);
+    }
 }
 
 /// The signal saying whether `id` holds focus, made the first time anyone asks and kept until `id` leaves the order; `None` for an id not in the order.
@@ -933,6 +1031,7 @@ pub(crate) fn forget_nodes() {
         release(entry.id);
         forget_holding(entry.id);
     }
+    forget_within();
     if !entries.is_empty() {
         roster_changed();
     }
@@ -1432,11 +1531,14 @@ pub fn controls_within(node: NodeId) -> Vec<FocusId> {
 }
 
 /// Whether a control at or inside `node` holds focus and shows it. Reactive, like [`is_focus_visible`]: what a hint that shows for the keyboard as it does for the pointer follows.
+///
+/// The caller runs again when focus enters or leaves `node`, and while it is inside, when it moves or starts or stops showing; not whenever focus moves between two controls elsewhere, which is what keeps a move of focus on a page of thousands of hints to the ones it left and reached.
 pub fn shows_focus_within(node: NodeId) -> bool {
-    current().is_some_and(|id| {
-        is_focus_visible(id)
-            && node_of(id).is_some_and(|at| crate::input_region::is_inside(at, node))
-    })
+    within(node).get()
+        && current().is_some_and(|id| {
+            is_focus_visible(id)
+                && node_of(id).is_some_and(|at| crate::input_region::is_inside(at, node))
+        })
 }
 
 /// Declares that the field `id` has a caret, and how to read where it and the selection are now, in the characters of what the field shows: what a reader follows while the field holds the keyboard.

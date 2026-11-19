@@ -259,3 +259,38 @@ fn a_walk_says_how_far_it_moved_each_sticky_node() {
         "and so does placing its subtree again for a new view"
     );
 }
+
+/// A walk of what moved still places a sticky box again when only the view moved, though no layout moved anything, and leaves everything else where it was.
+#[test]
+fn a_walk_of_what_moved_carries_a_sticky_box_with_the_view() {
+    let mut page = page(LayoutStyle::new().sticky().inset_top(10.0));
+    let mut held = FxHashMap::default();
+    let mut walk = |page: &mut Page, view: Rect| {
+        let mut reached = Vec::new();
+        let anchors = page
+            .engine
+            .walk_moved(page.root, view, &mut |node, rect| {
+                reached.push(node);
+                held.insert(node, rect);
+                true
+            })
+            .unwrap()
+            .anchors;
+        (reached, anchors)
+    };
+    walk(&mut page, scrolled(0.0));
+    let (reached, anchors) = walk(&mut page, scrolled(300.0));
+    assert_eq!(reached, [page.root, page.section, page.bar, page.label]);
+    assert_eq!(
+        anchors.iter().map(StickyAnchor::node).collect::<Vec<_>>(),
+        vec![page.bar]
+    );
+    let (reached, anchors) = walk(&mut page, scrolled(300.0));
+    assert_eq!(reached, [page.root], "nothing moved, view included");
+    assert_eq!(
+        anchors.iter().map(StickyAnchor::node).collect::<Vec<_>>(),
+        vec![page.bar],
+        "and the sticky box it passed over is still an anchor"
+    );
+    assert_eq!(held, rects_in_view(&page, scrolled(300.0)).0);
+}

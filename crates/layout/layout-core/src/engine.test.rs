@@ -190,7 +190,7 @@ fn restyling_a_node_drops_the_logical_edges_it_no_longer_has() {
         .set_style(node, LayoutStyle::new().width(50.0))
         .unwrap();
     engine.set_direction(Direction::Rtl);
-    let style = engine.tree.style(node).unwrap();
+    let style = engine.tree.style(node);
     assert_eq!(style.padding.left, taffy::LengthPercentage::length(0.0));
     assert_eq!(style.padding.right, taffy::LengthPercentage::length(0.0));
 }
@@ -205,13 +205,13 @@ fn a_gap_margin_follows_the_edge_its_row_leads_from() {
         .unwrap();
     engine.set_leading_margin(second, true, 8.0);
     assert_eq!(
-        engine.tree.style(second).unwrap().margin.left,
+        engine.tree.style(second).margin.left,
         taffy::LengthPercentageAuto::length(8.0)
     );
 
     engine.set_direction(Direction::Rtl);
     engine.mark_dirty(row).unwrap();
-    let margin = engine.tree.style(second).unwrap().margin;
+    let margin = engine.tree.style(second).margin;
     assert_eq!(
         margin.right,
         taffy::LengthPercentageAuto::length(8.0),
@@ -848,4 +848,105 @@ fn engine_grid_content_sized_tracks_take_the_width_their_content_asks() {
     use crate::track::TemplateTrack;
     assert_eq!(content_sized_column(TemplateTrack::max_content()), 80.0);
     assert_eq!(content_sized_column(TemplateTrack::min_content()), 40.0);
+}
+
+/// A column of `rows` 200px rows, each holding two 20px leaves: what [`LayoutEngine::walk_moved`] is asked to keep current.
+fn lay_out_tall(engine: &mut LayoutEngine, root: NodeId) {
+    engine
+        .compute_layout(
+            root,
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+}
+
+fn column_of_rows(engine: &mut LayoutEngine, rows: usize) -> (NodeId, Vec<NodeId>, Vec<NodeId>) {
+    let mut row_nodes = Vec::new();
+    let mut leaves = Vec::new();
+    for _ in 0..rows {
+        let pair = [
+            engine
+                .new_leaf(LayoutStyle::new().width(20.0).height(20.0))
+                .unwrap(),
+            engine
+                .new_leaf(LayoutStyle::new().width(20.0).height(20.0))
+                .unwrap(),
+        ];
+        row_nodes.push(
+            engine
+                .new_container(LayoutStyle::row().width(200.0), &pair)
+                .unwrap(),
+        );
+        leaves.extend(pair);
+    }
+    let root = engine
+        .new_container(LayoutStyle::column(), &row_nodes)
+        .unwrap();
+    lay_out_tall(engine, root);
+    (root, row_nodes, leaves)
+}
+
+/// Every rect `walk_moved` reports, keyed by node, folded over what earlier walks reported: what a caller publishing each rect it is handed ends up holding.
+fn walk_moved_into(
+    engine: &mut LayoutEngine,
+    root: NodeId,
+    held: &mut FxHashMap<NodeId, geometry_core::Rect>,
+) -> Vec<NodeId> {
+    let view = engine.root_rect(root).unwrap();
+    let mut reached = Vec::new();
+    engine
+        .walk_moved(root, view, &mut |node, rect| {
+            reached.push(node);
+            held.insert(node, rect);
+            true
+        })
+        .unwrap();
+    reached
+}
+
+fn walk_everything(engine: &LayoutEngine, root: NodeId) -> FxHashMap<NodeId, geometry_core::Rect> {
+    let mut all = FxHashMap::default();
+    engine
+        .walk_in_view(root, engine.root_rect(root).unwrap(), &mut |node, rect| {
+            all.insert(node, rect);
+            true
+        })
+        .unwrap();
+    all
+}
+
+/// A walk that keeps its last placements reaches only the boxes a layout moved, and what it reached, laid over what it reached before, is everything a full walk reports.
+#[test]
+fn a_walk_of_what_moved_reaches_the_changed_row_and_nothing_beside_it() {
+    let mut engine = LayoutEngine::new();
+    let (root, rows, leaves) = column_of_rows(&mut engine, 10);
+    let mut held = FxHashMap::default();
+    assert_eq!(walk_moved_into(&mut engine, root, &mut held).len(), 31);
+    assert_eq!(
+        walk_moved_into(&mut engine, root, &mut held),
+        [root],
+        "nothing moved, so only the root is reached"
+    );
+
+    engine
+        .set_style(leaves[8], LayoutStyle::new().width(35.0).height(20.0))
+        .unwrap();
+    lay_out_tall(&mut engine, root);
+    assert_eq!(
+        walk_moved_into(&mut engine, root, &mut held),
+        [root, rows[4], leaves[8], leaves[9]]
+    );
+    assert_eq!(held, walk_everything(&engine, root));
+
+    engine
+        .set_style(leaves[2], LayoutStyle::new().width(20.0).height(32.0))
+        .unwrap();
+    lay_out_tall(&mut engine, root);
+    let reached = walk_moved_into(&mut engine, root, &mut held);
+    assert!(
+        !reached.contains(&rows[0]) && reached.contains(&rows[1]) && reached.contains(&rows[9]),
+        "a taller row moves the rows after it and not the one before"
+    );
+    assert_eq!(held, walk_everything(&engine, root));
 }

@@ -223,3 +223,44 @@ fn scroll_content_wider_than_its_host_keeps_its_own_width() {
     assert_eq!(host.width, 600.0);
     assert_eq!(content.width, 3000.0);
 }
+
+/// A content reaches as far as the deepest box inside it, and follows that box when it grows: the size is kept from one layout to the next, and a box three levels down moving is what has to reach it.
+#[test]
+fn a_scroll_content_follows_a_box_deep_inside_it() {
+    let mut engine = LayoutEngine::new();
+    let deep = engine
+        .new_leaf(LayoutStyle::new().width(300.0).height(20.0))
+        .unwrap();
+    let inner = engine
+        .new_container(LayoutStyle::new().width(50.0).height(50.0), &[deep])
+        .unwrap();
+    let middle = engine
+        .new_container(LayoutStyle::new().width(60.0).height(60.0), &[inner])
+        .unwrap();
+    let content = engine
+        .new_container(LayoutStyle::new().width(100.0).height(100.0), &[middle])
+        .unwrap();
+    let host = engine
+        .new_leaf(LayoutStyle::new().width(100.0).height(100.0))
+        .unwrap();
+    engine.set_scroll_content(host, content).unwrap();
+    let root = engine
+        .new_container(LayoutStyle::new().flex_row(), &[host])
+        .unwrap();
+    lay_out_again(&mut engine, root);
+    assert_eq!(engine.root_rect(content).unwrap().width, 300.0);
+
+    engine
+        .set_style(deep, LayoutStyle::new().width(420.0).height(20.0))
+        .unwrap();
+    lay_out_again(&mut engine, root);
+    assert_eq!(engine.root_rect(content).unwrap().width, 420.0);
+
+    engine.set_display(inner, false);
+    lay_out_again(&mut engine, root);
+    assert_eq!(
+        engine.root_rect(content).unwrap().width,
+        100.0,
+        "a hidden box reaches nowhere"
+    );
+}

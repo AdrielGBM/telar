@@ -1,7 +1,7 @@
-//! The layout engine: a taffy tree behind an id-keyed API, plus the measure hooks and dirty tracking the reactive layer drives it with.
+//! The layout engine: taffy's algorithms over a tree of its own, behind an id-keyed API, plus the measure hooks and dirty tracking the reactive layer drives it with.
 
 use rustc_hash::{FxHashMap, FxHashSet};
-use taffy::{TaffyTree, TraversePartialTree};
+use taffy::LayoutOutput;
 
 use geometry_core::{LayoutGrid, Size};
 use i18n_core::Direction;
@@ -9,6 +9,7 @@ use i18n_core::Direction;
 use crate::error::LayoutError;
 use crate::sticky::StickyInsets;
 use crate::style::{AvailableSpace, LayoutStyle};
+use crate::tree::{LayoutTree, PlacedFrom};
 
 /// A node in the layout tree. Ids are reused after a node is freed, so a stale one may name a live node.
 pub type NodeId = taffy::NodeId;
@@ -37,7 +38,7 @@ impl MeasureInput {
 
 /// The layout tree: nodes, their styles, and the measure hooks for the leaves that size themselves.
 pub struct LayoutEngine {
-    tree: TaffyTree<MeasureFn>,
+    tree: LayoutTree,
     direction: Direction,
     surface: Size,
     grid: LayoutGrid,
@@ -49,12 +50,16 @@ pub struct LayoutEngine {
     sticky: FxHashMap<NodeId, StickyInsets>,
     /// The content of every scroll container: laid out inside its container, so the container is sized by it as CSS sizes an overflow box, yet walked as a root of its own, so its rects stay in the space the scroll offset indexes into.
     scroll_contents: FxHashSet<NodeId>,
+    /// What the last [`walk_moved`](Self::walk_moved) of each root left behind.
+    walks: FxHashMap<NodeId, RootWalk>,
+    /// How many [`walk_moved`](Self::walk_moved) walks have run, which is how each numbers the nodes it reaches.
+    walks_made: u64,
 }
 
 impl LayoutEngine {
     pub fn new() -> Self {
         Self {
-            tree: TaffyTree::new(),
+            tree: LayoutTree::new(),
             direction: Direction::default(),
             surface: Size::ZERO,
             grid: LayoutGrid::UNIT,
@@ -62,6 +67,8 @@ impl LayoutEngine {
             live: FxHashSet::default(),
             sticky: FxHashMap::default(),
             scroll_contents: FxHashSet::default(),
+            walks: FxHashMap::default(),
+            walks_made: 0,
         }
     }
 
@@ -178,15 +185,16 @@ impl LayoutEngine {
             }
         }
         self.fall_back_from_stretch(node, &mut resolved);
-        let _ = self.tree.set_style(node, resolved);
+        self.tree.set_style(node, resolved);
     }
 
     /// Re-resolves the children of `parent` that are sized by their content, whose alignment depends on `parent`'s style.
     fn refit_children(&mut self, parent: NodeId) {
         let content_sized: Vec<(NodeId, LayoutStyle)> = self
             .tree
-            .child_ids(parent)
-            .filter_map(|child| {
+            .children(parent)
+            .iter()
+            .filter_map(|&child| {
                 let style = self.styles.get(&child)?;
                 style.is_content_sized().then(|| (child, style.clone()))
             })
@@ -238,6 +246,7 @@ impl LayoutEngine {
         self.styles.remove(&node);
         self.sticky.remove(&node);
         self.scroll_contents.remove(&node);
+        self.walks.remove(&node);
     }
 
     fn note_sticky(&mut self, node: NodeId, style: &LayoutStyle) {
@@ -250,7 +259,7 @@ impl LayoutEngine {
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {
         let node = self
             .tree
-            .new_leaf(style.resolve(self.direction, self.surface, self.grid))?;
+            .new_leaf(style.resolve(self.direction, self.surface, self.grid));
         self.note_sticky(node, &style);
         self.track(node, style);
         Ok(node)
@@ -261,10 +270,10 @@ impl LayoutEngine {
         style: LayoutStyle,
         measure: MeasureFn,
     ) -> Result<NodeId, LayoutError> {
-        let node = self.tree.new_leaf_with_context(
+        let node = self.tree.new_measured_leaf(
             style.resolve(self.direction, self.surface, self.grid),
             measure,
-        )?;
+        );
         self.note_sticky(node, &style);
         self.track(node, style);
         Ok(node)
@@ -281,7 +290,7 @@ impl LayoutEngine {
         let node = self.tree.new_with_children(
             style.resolve(self.direction, self.surface, self.grid),
             children,
-        )?;
+        );
         self.note_sticky(node, &style);
         self.track(node, style);
         self.refit_children(node);
@@ -324,7 +333,7 @@ impl LayoutEngine {
         for &child in children {
             self.alive(child)?;
         }
-        self.tree.set_children(parent, children)?;
+        self.tree.set_children(parent, children);
         self.refit_children(parent);
         Ok(())
     }
@@ -334,7 +343,7 @@ impl LayoutEngine {
         self.alive(parent)?;
         self.alive(child)?;
         self.leave_parent(child);
-        self.tree.add_child(parent, child)?;
+        self.tree.add_child(parent, child);
         self.refit_children(parent);
         Ok(())
     }
@@ -345,7 +354,7 @@ impl LayoutEngine {
             return;
         }
         if let Some(previous) = self.tree.parent(child) {
-            self.tree.remove_child(previous, child).ok();
+            self.tree.remove_child(previous, child);
         }
     }
 
@@ -353,10 +362,8 @@ impl LayoutEngine {
     pub fn remove_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
         self.alive(parent)?;
         self.alive(child)?;
-        self.tree
-            .remove_child(parent, child)
-            .map(|_| ())
-            .map_err(LayoutError::from)
+        self.tree.remove_child(parent, child);
+        Ok(())
     }
 
     /// Makes `host` a scroll container holding `content` as its only child.
@@ -365,9 +372,8 @@ impl LayoutEngine {
     pub fn set_scroll_content(&mut self, host: NodeId, content: NodeId) -> Result<(), LayoutError> {
         self.alive(host)?;
         self.alive(content)?;
-        self.tree
-            .set_children(host, &[content])
-            .map_err(LayoutError::from)?;
+        self.tree.mark_scroll_content(content);
+        self.tree.set_children(host, &[content]);
         self.scroll_contents.insert(content);
         self.mutate_style(host, |style| style.logical.scrolls = true);
         Ok(())
@@ -383,7 +389,7 @@ impl LayoutEngine {
         if !self.live.contains(&node) {
             return None;
         }
-        self.tree.style(node).ok()
+        Some(self.tree.style(node))
     }
 
     /// An error, rather than a panic, for a node that has been freed.
@@ -407,9 +413,7 @@ impl LayoutEngine {
             return;
         }
         self.forget(node);
-        // Taffy's `remove` leaves the node's context in its slot, so the measure and all it captured would outlive the node.
-        let _ = self.tree.set_node_context(node, None);
-        let _ = self.tree.remove(node);
+        self.tree.remove(node);
     }
 
     /// The nodes `node` currently holds, in order; empty once it has been freed.
@@ -417,7 +421,7 @@ impl LayoutEngine {
         if self.alive(node).is_err() {
             return Vec::new();
         }
-        self.tree.children(node).unwrap_or_default()
+        self.tree.children(node).to_vec()
     }
 
     pub fn is_alive(&self, node: NodeId) -> bool {
@@ -430,7 +434,8 @@ impl LayoutEngine {
 
     pub fn mark_dirty(&mut self, node: NodeId) -> Result<(), LayoutError> {
         self.alive(node)?;
-        self.tree.mark_dirty(node).map_err(LayoutError::from)
+        self.tree.mark_dirty(node);
+        Ok(())
     }
 
     /// Marks every leaf that sizes itself by measuring its content stale, for when what measures it has started answering differently — a face arrived, so text that was measured in a fallback measures in the face now.
@@ -439,10 +444,10 @@ impl LayoutEngine {
             .live
             .iter()
             .copied()
-            .filter(|&node| self.tree.get_node_context(node).is_some())
+            .filter(|&node| self.tree.has_measure(node))
             .collect();
         for node in measured {
-            let _ = self.tree.mark_dirty(node);
+            self.tree.mark_dirty(node);
         }
     }
 
@@ -489,15 +494,10 @@ impl LayoutEngine {
         if self.alive(node).is_err() {
             return false;
         }
-        self.tree
-            .style(node)
-            .map(|s| {
-                matches!(
-                    s.flex_direction,
-                    taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse
-                )
-            })
-            .unwrap_or(false)
+        matches!(
+            self.tree.style(node).flex_direction,
+            taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse
+        )
     }
 
     /// Sets the node's leading margin on the host's main axis (`top` for a column; for a row, whichever horizontal edge the host lays out from) to `px`, leaving the other edges untouched. A transparent `for … gap:N` uses this to space its items by a gap without a container of its own: the item cell carries the gap as a margin instead.
@@ -543,50 +543,51 @@ impl LayoutEngine {
         available_height: AvailableSpace,
     ) -> Result<(), LayoutError> {
         self.alive(root)?;
-        self.tree
-            .compute_layout_with_measure(
-                root,
-                taffy::geometry::Size {
-                    width: available_width,
-                    height: available_height,
-                },
-                |inputs, _node, context, style| {
-                    let containing_width = inputs.parent_size.width;
-                    // Taffy 0.14 measures a flex item across its parent's axis in the room the parent offers, even when its width is its content's own.
-                    let unwrapped = style.size.width == taffy::Dimension::max_content();
-                    taffy::compute_leaf_layout(
-                        inputs,
-                        style,
-                        |_, _| 0.0,
-                        |known, available| {
-                            let Some(measure) = context else {
-                                return taffy::geometry::Size::ZERO;
-                            };
-                            let width = match (known.width, unwrapped) {
-                                (Some(width), _) => AvailableSpace::Definite(width),
-                                (None, true) => AvailableSpace::MaxContent,
-                                (None, false) => available.width,
-                            };
-                            let (mw, mh) = measure(MeasureInput {
-                                width,
-                                containing_width,
-                            });
-                            taffy::geometry::Size {
-                                width: known.width.unwrap_or(mw),
-                                height: known.height.unwrap_or(mh),
-                            }
-                        },
-                    )
-                },
-            )
-            .map_err(LayoutError::from)
+        self.tree.compute(
+            root,
+            taffy::geometry::Size {
+                width: available_width,
+                height: available_height,
+            },
+            |inputs, context, style| -> LayoutOutput {
+                let containing_width = inputs.parent_size.width;
+                // Taffy 0.14 measures a flex item across its parent's axis in the room the parent offers, even when its width is its content's own.
+                let unwrapped = style.size.width == taffy::Dimension::max_content();
+                taffy::compute_leaf_layout(
+                    inputs,
+                    style,
+                    |_, _| 0.0,
+                    |known, available| {
+                        let Some(measure) = context else {
+                            return taffy::geometry::Size::ZERO;
+                        };
+                        let width = match (known.width, unwrapped) {
+                            (Some(width), _) => AvailableSpace::Definite(width),
+                            (None, true) => AvailableSpace::MaxContent,
+                            (None, false) => available.width,
+                        };
+                        let (mw, mh) = measure(MeasureInput {
+                            width,
+                            containing_width,
+                        });
+                        taffy::geometry::Size {
+                            width: known.width.unwrap_or(mw),
+                            height: known.height.unwrap_or(mh),
+                        }
+                    },
+                )
+            },
+        );
+        Ok(())
     }
 
     /// The content box a leaf that measures itself was laid out to, or `None` for any other node: what a document has to be told, since it cannot measure what such a leaf draws.
     pub fn measured_content(&self, node: NodeId) -> Option<Size> {
         self.alive(node).ok()?;
-        self.tree.get_node_context(node)?;
-        let layout = self.tree.layout(node).ok()?;
+        if !self.tree.has_measure(node) {
+            return None;
+        }
+        let layout = self.tree.layout(node);
         let (padding, border) = (layout.padding, layout.border);
         Some(Size::new(
             (layout.size.width - padding.left - padding.right - border.left - border.right)
@@ -597,12 +598,12 @@ impl LayoutEngine {
     }
 
     pub fn is_dirty(&self, node: NodeId) -> bool {
-        self.live.contains(&node) && self.tree.dirty(node).unwrap_or(true)
+        self.live.contains(&node) && self.tree.is_dirty(node)
     }
 
     pub fn layout(&self, node: NodeId) -> Result<geometry_core::Rect, LayoutError> {
         self.alive(node)?;
-        let layout = self.tree.layout(node).map_err(LayoutError::from)?;
+        let layout = self.tree.layout(node);
         let size = self.laid_out_size(node, layout);
         Ok(geometry_core::Rect::new(
             layout.location.x,
@@ -619,35 +620,24 @@ impl LayoutEngine {
         }
         let mut right = layout.size.width;
         let mut bottom = layout.size.height;
-        let mut stack: Vec<(NodeId, f32, f32, bool)> = self
-            .tree
-            .child_ids(node)
-            .map(|child| (child, 0.0, 0.0, true))
-            .collect();
-        while let Some((child, x, y, direct)) = stack.pop() {
-            let Ok(child_layout) = self.tree.layout(child) else {
-                continue;
-            };
-            let Ok(style) = self.tree.style(child) else {
-                continue;
-            };
+        for &child in self.tree.children(node) {
+            let style = self.tree.style(child);
             if style.display == taffy::Display::None || self.scroll_contents.contains(&child) {
                 continue;
             }
-            let (end, foot) = if direct && style.position != taffy::Position::Absolute {
-                (layout.padding.right, layout.padding.bottom)
-            } else {
+            let (end, foot) = if style.position == taffy::Position::Absolute {
                 (0.0, 0.0)
+            } else {
+                (layout.padding.right, layout.padding.bottom)
             };
-            let x = x + child_layout.location.x;
-            let y = y + child_layout.location.y;
-            right = right.max(x + child_layout.size.width + end);
-            bottom = bottom.max(y + child_layout.size.height + foot);
-            stack.extend(
-                self.tree
-                    .child_ids(child)
-                    .map(|grandchild| (grandchild, x, y, false)),
-            );
+            let at = self.tree.layout(child);
+            let (reach_x, reach_y) = self.tree.reach(child);
+            right = right
+                .max(at.location.x + at.size.width + end)
+                .max(at.location.x + reach_x);
+            bottom = bottom
+                .max(at.location.y + at.size.height + foot)
+                .max(at.location.y + reach_y);
         }
         taffy::Size {
             width: right,
@@ -674,8 +664,8 @@ impl LayoutEngine {
         use taffy::ResolveOrZero;
 
         self.alive(node)?;
-        let layout = self.tree.layout(node).map_err(LayoutError::from)?;
-        let style = self.tree.style(node).map_err(LayoutError::from)?;
+        let layout = self.tree.layout(node);
+        let style = self.tree.style(node);
         let insets = |rect: taffy::Rect<f32>| {
             geometry_core::Insets::new(rect.top, rect.right, rect.bottom, rect.left)
         };
@@ -717,7 +707,13 @@ impl LayoutEngine {
         F: FnMut(NodeId, geometry_core::Rect) -> bool,
     {
         self.alive(root)?;
-        self.visit(self.root_visit(root)?, None, f, &mut Walked::default())
+        self.visit(
+            self.root_visit(root)?,
+            None,
+            f,
+            &mut Walked::default(),
+            None,
+        )
     }
 
     /// [`walk`](Self::walk), with every sticky node displaced for `view` — the root-relative rect the tree is seen through, such as a scroll viewport's visible window over its content — and its subtree displaced with it.
@@ -736,8 +732,94 @@ impl LayoutEngine {
     {
         self.alive(root)?;
         let mut walked = Walked::default();
-        self.visit(self.root_visit(root)?, Some(view), f, &mut walked)?;
+        self.visit(self.root_visit(root)?, Some(view), f, &mut walked, None)?;
         Ok(walked)
+    }
+
+    /// [`walk_in_view`](Self::walk_in_view) for a caller that keeps what each walk of `root` reported, such as the signals a layout is published through: reaches only what moved since the last time `root` was walked this way, every node the first time, and every sticky node when `view` changed since.
+    ///
+    /// A subtree is passed over when no layout pass since moved anything in it, its root is not sticky, and it is placed from where it was placed before: everything in it would come out where it did. The anchors it returns are still every outermost sticky node under `root`, those found in what it passed over included.
+    pub fn walk_moved<F>(
+        &mut self,
+        root: NodeId,
+        view: geometry_core::Rect,
+        f: &mut F,
+    ) -> Result<Walked, LayoutError>
+    where
+        F: FnMut(NodeId, geometry_core::Rect) -> bool,
+    {
+        self.alive(root)?;
+        self.walks_made += 1;
+        let walk = self.walks_made;
+        let last = self.walks.remove(&root);
+        let toward_sticky: Option<FxHashSet<NodeId>> =
+            last.as_ref().filter(|last| last.view != view).map(|last| {
+                last.anchors
+                    .iter()
+                    .flat_map(|anchor| self.climb(anchor.node, root))
+                    .collect()
+            });
+        let placing = Placing {
+            since: last.as_ref().map(|last| last.pass),
+            walk,
+            toward_sticky: toward_sticky.as_ref(),
+        };
+        let mut walked = Walked::default();
+        self.visit(
+            self.root_visit(root)?,
+            Some(view),
+            f,
+            &mut walked,
+            Some(placing),
+        )?;
+        if let Some(last) = last {
+            let passed_over: Vec<StickyAnchor> = last
+                .anchors
+                .into_iter()
+                .filter(|anchor| self.still_anchors(anchor, root, walk))
+                .collect();
+            walked.anchors.extend(passed_over);
+        }
+        self.walks.insert(
+            root,
+            RootWalk {
+                pass: self.tree.rounding_passes(),
+                view,
+                anchors: walked.anchors.clone(),
+            },
+        );
+        Ok(walked)
+    }
+
+    /// `node` and the nodes above it, up to but not including `root`.
+    fn climb(&self, node: NodeId, root: NodeId) -> Vec<NodeId> {
+        let mut path = Vec::new();
+        let mut at = Some(node);
+        while let Some(node) = at.filter(|&node| node != root) {
+            path.push(node);
+            at = self.tree.parent(node);
+        }
+        path
+    }
+
+    /// Whether `anchor`, found by an earlier walk of `root` and not reached by walk `walk`, is still an outermost sticky node under `root`: in a subtree that walk passed over, and so where it was.
+    fn still_anchors(&self, anchor: &StickyAnchor, root: NodeId, walk: u64) -> bool {
+        if !self.is_sticky(anchor.node) || self.tree.placed_in(anchor.node) == walk {
+            return false;
+        }
+        let mut at = anchor.node;
+        loop {
+            let Some(parent) = self.tree.parent(at) else {
+                return false;
+            };
+            if parent == root {
+                return true;
+            }
+            if self.is_sticky(parent) || self.scroll_contents.contains(&parent) {
+                return false;
+            }
+            at = parent;
+        }
     }
 
     /// The rect `root` is at when walked as a root: where layout put it, or, for a scroll container's content, its own box at the origin.
@@ -753,7 +835,7 @@ impl LayoutEngine {
     fn root_visit(&self, root: NodeId) -> Result<Visit, LayoutError> {
         let mut visit = Visit::root(root);
         if self.is_scroll_content(root) {
-            let location = self.tree.layout(root).map_err(LayoutError::from)?.location;
+            let location = self.tree.layout(root).location;
             visit.origin = (-location.x, -location.y);
         }
         Ok(visit)
@@ -778,7 +860,7 @@ impl LayoutEngine {
             inside_sticky: false,
         };
         let mut walked = Walked::default();
-        self.visit(first, Some(view), f, &mut walked)?;
+        self.visit(first, Some(view), f, &mut walked, None)?;
         Ok(walked.displaced)
     }
 
@@ -788,6 +870,7 @@ impl LayoutEngine {
         view: Option<geometry_core::Rect>,
         f: &mut F,
         walked: &mut Walked,
+        placing: Option<Placing<'_>>,
     ) -> Result<(), LayoutError>
     where
         F: FnMut(NodeId, geometry_core::Rect) -> bool,
@@ -796,13 +879,9 @@ impl LayoutEngine {
         stack.push(first);
 
         while let Some(visit) = stack.pop() {
-            let layout = self.tree.layout(visit.node).map_err(LayoutError::from)?;
-            let hidden = visit.hidden
-                || self
-                    .tree
-                    .style(visit.node)
-                    .map(|s| s.display == taffy::Display::None)
-                    .unwrap_or(false);
+            let layout = self.tree.layout(visit.node);
+            let hidden =
+                visit.hidden || self.tree.style(visit.node).display == taffy::Display::None;
             let (w, h) = if hidden {
                 (0.0, 0.0)
             } else {
@@ -818,6 +897,17 @@ impl LayoutEngine {
                 }
                 _ => None,
             };
+            if let Some(placing) = placing {
+                self.tree.note_placed(
+                    visit.node,
+                    PlacedFrom {
+                        origin: visit.origin,
+                        hidden: visit.hidden,
+                        sticky: sticky.is_some(),
+                    },
+                    placing.walk,
+                );
+            }
             if let Some((view, container, insets)) = sticky {
                 if !visit.inside_sticky {
                     walked.anchors.push(StickyAnchor {
@@ -851,11 +941,22 @@ impl LayoutEngine {
                     (h - inset_y - layout.border.bottom - layout.padding.bottom).max(0.0),
                 );
                 let base = stack.len();
-                for child in self.tree.child_ids(visit.node) {
+                for &child in self.tree.children(visit.node) {
                     if self.scroll_contents.contains(&child) {
                         if !hidden {
                             walked.scroll_contents.push(child);
                         }
+                        continue;
+                    }
+                    let from = PlacedFrom {
+                        origin: (x, y),
+                        hidden,
+                        sticky: false,
+                    };
+                    let beneath_sticky = visit.inside_sticky || sticky.is_some();
+                    if placing
+                        .is_some_and(|placing| self.unmoved(child, from, beneath_sticky, placing))
+                    {
                         continue;
                     }
                     stack.push(Visit {
@@ -863,7 +964,7 @@ impl LayoutEngine {
                         origin: (x, y),
                         container: Some(content),
                         hidden,
-                        inside_sticky: visit.inside_sticky || sticky.is_some(),
+                        inside_sticky: beneath_sticky,
                     });
                 }
                 stack[base..].reverse();
@@ -871,6 +972,43 @@ impl LayoutEngine {
         }
         Ok(())
     }
+
+    /// Whether a walk placing as `placing` says can pass over `node`, placed from `from`: nothing in it moved since the last such walk, it is placed from where it was, it neither is nor was sticky, and, when the view moved, it neither holds nor is held by a sticky node: those move with the view however still the rest stands.
+    fn unmoved(
+        &self,
+        node: NodeId,
+        from: PlacedFrom,
+        beneath_sticky: bool,
+        placing: Placing<'_>,
+    ) -> bool {
+        let view_moved = placing.toward_sticky.is_some();
+        placing
+            .since
+            .is_some_and(|since| self.tree.moved_in(node) <= since)
+            && self.tree.placed_from(node) == Some(from)
+            && !self.is_sticky(node)
+            && !(view_moved && beneath_sticky)
+            && !placing
+                .toward_sticky
+                .is_some_and(|toward| toward.contains(&node))
+    }
+}
+
+/// What a walk that keeps its last placements needs: the rounding pass of the last walk of the same root, if there was one, this walk's number, which it stamps every node it reaches with, and, when the view moved since, the nodes on the way to the sticky ones that walk found, which it cannot pass over any more than what is under a sticky node.
+#[derive(Clone, Copy)]
+struct Placing<'a> {
+    since: Option<u64>,
+    walk: u64,
+    toward_sticky: Option<&'a FxHashSet<NodeId>>,
+}
+
+/// What the last [`walk_moved`](LayoutEngine::walk_moved) of a root left to compare the next one with.
+struct RootWalk {
+    /// The rounding pass it walked after.
+    pass: u64,
+    view: geometry_core::Rect,
+    /// Every outermost sticky node under the root, as of that walk.
+    anchors: Vec<StickyAnchor>,
 }
 
 /// One node a walk has still to reach, with what it has worked out above it.

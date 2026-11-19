@@ -1104,7 +1104,7 @@ impl LayoutRuntime {
             let mut placed = Placed::new(&self.registry, at);
             let walked = view.and_then(|view| {
                 self.engine
-                    .walk_in_view(at, view, &mut |node, rect| placed.visit(node, rect))
+                    .walk_moved(at, view, &mut |node, rect| placed.visit(node, rect))
             });
             let placed = placed.finish();
             let walked = walked?;

@@ -928,3 +928,42 @@ fn a_move_of_focus_reaches_only_the_controls_it_moves_between() {
     assert!(is_focused(ids[3]) && !is_focused(ids[1]));
     clear();
 }
+
+/// What reads whether the keyboard is inside one box runs again when focus enters or leaves that box, not whenever focus moves between two controls outside it: a hint on every row of a long page, each following its own row, costs a move of focus the rows it moved between.
+#[test]
+fn a_move_of_focus_reaches_only_the_boxes_it_enters_and_leaves() {
+    let (_scroll, ids, _viewport) = scrolled_controls(5);
+    let boxes: Vec<NodeId> = ids
+        .iter()
+        .map(|&id| node_of(id).expect("a control stands on a box"))
+        .collect();
+    let runs: Vec<Rc<std::cell::Cell<usize>>> = boxes
+        .iter()
+        .map(|&node| {
+            let runs = Rc::new(std::cell::Cell::new(0));
+            let counted = Rc::clone(&runs);
+            effect(move || {
+                shows_focus_within(node);
+                counted.set(counted.get() + 1);
+            });
+            runs
+        })
+        .collect();
+    let before: Vec<usize> = runs.iter().map(|runs| runs.get()).collect();
+    request(ids[1]);
+    request(ids[3]);
+    reactive_core::batch(|| {});
+    let after: Vec<usize> = runs.iter().map(|runs| runs.get()).collect();
+    let moved: Vec<usize> = before
+        .iter()
+        .zip(&after)
+        .map(|(was, now)| now - was)
+        .collect();
+    assert_eq!(moved, vec![0, 2, 0, 1, 0]);
+    assert!(shows_focus_within(boxes[3]) && !shows_focus_within(boxes[1]));
+    clear();
+    assert!(
+        !shows_focus_within(boxes[3]),
+        "and leaving every box empties the one it was in"
+    );
+}

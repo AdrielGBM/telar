@@ -10,6 +10,7 @@ mod error;
 mod sticky;
 mod style;
 mod track;
+mod tree;
 
 pub use css::Css;
 pub use engine::{Displaced, LayoutEngine, MeasureFn, MeasureInput, NodeId, StickyAnchor, Walked};

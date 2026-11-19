@@ -18,7 +18,7 @@ Phase legend (emitted by `renderer_core::perf`, in µs, rolling avg over 60 fram
 
 | phase | thread | what |
 | ------- | -------- | ------ |
-| `build` | UI | `tree.commands()` flatten + `dev.on_frame` |
+| `build` | UI | `tree.commands()` (the composed frame, patched where segments changed) + `dev.on_frame` |
 | `clone` | UI | the per-frame `Vec<DrawCommand>` clone handed to the render thread |
 | `interpret` | render | `analyze_frame` (dirty/scroll detection) + `interpret_commands` |
 | `gpu` | render | segment build + pass execution + `queue.submit` + `present` (superset of `present`) |

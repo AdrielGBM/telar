@@ -621,3 +621,102 @@ fn a_spliced_roots_overlays_are_walked_inside_the_place_it_is_spliced() {
         "the inner root's overlay leaves its own matrices behind, not the place its root is spliced"
     );
 }
+
+/// A leaf whose commands change in value, in number and in stratum: how many rects it draws, where, and whether in the page or an overlay.
+struct Shifting {
+    x: RwSignal<f32>,
+    count: RwSignal<usize>,
+    hoisted: RwSignal<bool>,
+}
+impl Component for Shifting {
+    fn view(&self) -> RenderNode {
+        let x = self.x.get();
+        let rects = RenderNode::group((0..self.count.get()).map(|i| rect(x + i as f32)));
+        if self.hoisted.get() {
+            RenderNode::overlay([rects])
+        } else {
+            rects
+        }
+    }
+}
+
+/// A row of shifting leaves under a parent that draws between them, nested one segment deep so a change inside it reaches the root through a parent that did not change.
+struct Row {
+    children: Vec<Rc<Segment>>,
+}
+impl Component for Row {
+    fn view(&self) -> RenderNode {
+        RenderNode::group(
+            self.children
+                .iter()
+                .enumerate()
+                .flat_map(|(i, child)| [rect(-(i as f32) - 1.0), child.boundary()]),
+        )
+    }
+}
+
+type Knobs = Vec<(RwSignal<f32>, RwSignal<usize>, RwSignal<bool>)>;
+
+fn mount_rows(knobs: &Knobs) -> SegmentRoot {
+    let rows = knobs
+        .chunks(2)
+        .map(|pair| {
+            let children = pair
+                .iter()
+                .map(|&(x, count, hoisted)| Segment::mount(Shifting { x, count, hoisted }))
+                .collect();
+            Segment::mount(Row { children })
+        })
+        .collect();
+    SegmentRoot::mount(Parent { children: rows })
+}
+
+/// A frame brought up to date where it changed is the frame a tree mounted from scratch composes, through every kind of change a segment makes: a value rewritten in place, a segment drawing more or fewer commands, one moving into an overlay and back.
+#[test]
+fn a_frame_patched_where_it_changed_is_the_frame_composed_from_scratch() {
+    let knobs: Knobs = (0..6)
+        .map(|i| (signal(i as f32 * 100.0), signal(2), signal(false)))
+        .collect();
+    let patched = mount_rows(&knobs);
+    let _ = patched.commands();
+
+    let steps: Vec<Box<dyn Fn()>> = vec![
+        Box::new({
+            let knobs = knobs.clone();
+            move || knobs[1].0.set(150.0)
+        }),
+        Box::new({
+            let knobs = knobs.clone();
+            move || knobs[2].1.set(5)
+        }),
+        Box::new({
+            let knobs = knobs.clone();
+            move || knobs[0].1.set(0)
+        }),
+        Box::new({
+            let knobs = knobs.clone();
+            move || knobs[3].2.set(true)
+        }),
+        Box::new({
+            let knobs = knobs.clone();
+            move || {
+                knobs[4].0.set(7.0);
+                knobs[5].1.set(3);
+            }
+        }),
+        Box::new({
+            let knobs = knobs.clone();
+            move || knobs[3].2.set(false)
+        }),
+    ];
+    for step in steps {
+        let generation = patched.generation();
+        step();
+        assert_eq!(*patched.commands(), *mount_rows(&knobs).commands());
+        assert_ne!(
+            patched.generation(),
+            generation,
+            "every change is a new frame"
+        );
+    }
+}

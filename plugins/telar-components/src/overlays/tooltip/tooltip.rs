@@ -131,13 +131,20 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             dismissed.set(false);
         }
     });
-    let last_focus = Cell::new(focus::current());
+    // Follows focus only while the pointer is near: every hint on a page following it woke them all at each Tab.
+    let last_focus = Cell::new(None);
     effect(move || {
+        if !near.get() {
+            last_focus.set(None);
+            return;
+        }
         let now = focus::current();
-        let moved_elsewhere = now != last_focus.replace(now)
-            && now.is_some_and(focus::is_focus_visible)
-            && !keyboard_on();
-        if moved_elsewhere && near.peek() {
+        let Some(before) = last_focus.replace(Some(now)) else {
+            return;
+        };
+        let moved_elsewhere =
+            now != before && now.is_some_and(focus::is_focus_visible) && !keyboard_on();
+        if moved_elsewhere {
             dismissed.set(true);
         }
     });

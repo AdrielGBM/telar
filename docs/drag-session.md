@@ -175,6 +175,11 @@ opens and is dropped into like any other.
 one `virtual_zone` instead: it builds only the items its scroll shows, and a margin past each edge, and places
 the rest where its `VirtualRows` says they stand, so the page costs what a screenful does whatever its length.
 
+A page that builds every item still costs only what changed when one item changes: a layout pass rounds and
+publishes only the boxes that moved, and the frame is patched where its segments changed. What a virtual zone
+saves on top is building every item, laying all of them out the first time, and handing the whole frame to the
+renderer and the accessibility tree on every frame.
+
 ```rust
 use telar::{DragSession, DropPlace, LayoutScrollArea, LayoutStyle, VirtualRows, memo};
 use telar_components::{ReorderGroup, Slot, VirtualZoneProps};

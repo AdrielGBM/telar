@@ -53,6 +53,12 @@ pub struct Segment {
     child_slots: Rc<RefCell<ChildSlots>>,
     // Set by the effect when this segment's output changes; cleared when composed.
     is_dirty: Rc<Cell<bool>>,
+    // Set with `is_dirty` when the change moved commands rather than only rewrote them: own commands added, dropped or moved to another stratum, or children spliced elsewhere. Without it, a recompose writes the new commands over the old ones where they stand.
+    is_reshaped: Rc<Cell<bool>>,
+    // Whether this segment or anything spliced under it changed since it was last composed, linked to the same flag of the segment that splices it.
+    stale: Rc<Stale>,
+    // How many commands this segment and everything spliced into it put in each stratum the last time it was composed: where the next segment's commands start.
+    extent: Cell<[usize; Stratum::COUNT]>,
     /// Set once a [`SegmentRoot`] composes this segment. Wherever such a segment is spliced it goes in as its root's whole frame, so what it hoists stays inside the box it is drawn in: a nested surface's dialog covers that surface, not the window around it.
     composition: OnceCell<Composition>,
 }
@@ -63,8 +69,14 @@ struct Composition {
     commands: RefCell<Vec<DrawCommand>>,
     valid: Cell<bool>,
     generation: Cell<u64>,
+    /// How many of `commands` each stratum holds, in the order they are joined.
+    lens: Cell<[usize; Stratum::COUNT]>,
+    /// The allocation the frame before last was held in, which a patch that moves commands builds the next frame in rather than allocating one the size of the page.
+    spare: RefCell<Vec<DrawCommand>>,
     /// Set when `commands` is rebuilt and cleared when a parent splices it. Whichever reader composes first clears the dirty flags, so a parent that did not still has to learn that its copy is stale.
     unspliced: Cell<bool>,
+    /// How many commands the parent that last spliced this frame took from it: where the parent's next commands start.
+    spliced_len: Cell<usize>,
 }
 
 /// A node emitted by [`Segment::walk`]: one mounted component, with its pre-order id, widget name, nesting depth, the bounding rect of its own draw commands unioned with all descendants', and the box model layout resolved for the box it draws.
@@ -120,10 +132,17 @@ impl Segment {
         let stack: Rc<RefCell<Vec<Step>>> = Default::default();
         // Starts dirty, so the first compose includes this segment.
         let is_dirty = Rc::new(Cell::new(true));
+        let is_reshaped = Rc::new(Cell::new(true));
 
         let own_c = Rc::clone(&own_commands);
         let slots_c = Rc::clone(&child_slots);
         let dirty_c = Rc::clone(&is_dirty);
+        let stale = Rc::new(Stale {
+            here: Cell::new(true),
+            above: RefCell::default(),
+        });
+        let stale_c = Rc::clone(&stale);
+        let reshaped_c = Rc::clone(&is_reshaped);
         effect(move || {
             let Some(node) = render() else {
                 return; // widget is mutably borrowed (event dispatch); keep last render
@@ -131,7 +150,7 @@ impl Segment {
             let mut own = own_c.borrow_mut();
             let mut stk = stack.borrow_mut();
             let mut new_slots: ChildSlots = Vec::new();
-            let own_changed = flatten_segment(node, &mut own, &mut new_slots, &mut stk);
+            let flattened = flatten_segment(node, &mut own, &mut new_slots, &mut stk);
             drop(stk);
             drop(own);
             let mut slots = slots_c.borrow_mut();
@@ -141,9 +160,13 @@ impl Segment {
                     .iter()
                     .zip(new_slots.iter())
                     .any(|(a, b)| a.0 != b.0 || a.2 != b.2 || !Rc::ptr_eq(&a.1, &b.1));
-            if own_changed || slots_changed {
+            if flattened.changed || slots_changed {
                 *slots = new_slots;
                 dirty_c.set(true);
+                stale_c.mark();
+            }
+            if flattened.reshaped || slots_changed {
+                reshaped_c.set(true);
             }
         });
 
@@ -152,6 +175,9 @@ impl Segment {
             own_commands,
             child_slots,
             is_dirty,
+            stale,
+            is_reshaped,
+            extent: Cell::new([0; Stratum::COUNT]),
             composition: OnceCell::new(),
         })
     }
@@ -306,17 +332,18 @@ fn within_world<R>(surfaces: &[Option<SurfaceHandle>], f: impl FnOnce() -> R) ->
     }
 }
 
-/// Flattens one segment's `RenderNode` into its own command list, in place: `RenderNode::Boundary` records a child-splice point instead of emitting the child's commands, which is what keeps a parent's re-render off its children. Returns whether that list changed.
+/// Flattens one segment's `RenderNode` into its own command list, in place: `RenderNode::Boundary` records a child-splice point instead of emitting the child's commands, which is what keeps a parent's re-render off its children. Returns how that list changed.
 fn flatten_segment(
     root: RenderNode,
     out: &mut Vec<(DrawCommand, Stratum)>,
     slots: &mut ChildSlots,
     stack: &mut Vec<Step>,
-) -> bool {
+) -> Flattened {
     stack.clear();
     stack.push(Step::Node(root));
     let mut pos: usize = 0;
     let mut changed = false;
+    let mut reshaped = false;
     // Greater than 0 means the commands emitted now are hoisted into that stratum.
     let mut overlay_depth: usize = 0;
     let mut fixed_depth: usize = 0;
@@ -332,12 +359,14 @@ fn flatten_segment(
             let entry = ($command, stratum(overlay_depth, fixed_depth));
             if pos < out.len() {
                 if out[pos] != entry {
+                    reshaped |= out[pos].1 != entry.1;
                     out[pos] = entry;
                     changed = true;
                 }
             } else {
                 out.push(entry);
                 changed = true;
+                reshaped = true;
             }
             pos += 1;
         }};
@@ -432,81 +461,281 @@ fn flatten_segment(
     if pos != out.len() {
         out.truncate(pos);
         changed = true;
+        reshaped = true;
     }
-    changed
+    Flattened { changed, reshaped }
 }
 
-/// Lazily composes a segment subtree into a flat command list, splicing each child's current commands at its recorded position. O(total commands) but only cheap clones — the expensive `view()` + flatten already ran (per segment) and is skipped for unchanged segments. Each command goes to the list of its [`Stratum`], the highest of its own and `enclosing`, so what is hoisted lands after the page, drawn on top and free of any ancestor clip or transform. See [`SegmentRoot::commands`] for how the lists are joined.
+/// How a re-render changed a segment's own commands.
+struct Flattened {
+    changed: bool,
+    /// Commands were added, dropped or moved to another stratum, so they no longer stand where the last compose put them.
+    reshaped: bool,
+}
+
+/// Composes a segment subtree into one command list per [`Stratum`], splicing each child's current commands at its recorded position. O(commands in the subtree), but only clones: the expensive `view()` and flatten already ran per segment, and are skipped for unchanged ones. Each command goes to the list of its stratum, the highest of its own and `enclosing`, so what is hoisted lands after the page, drawn on top and free of any ancestor clip or transform. Records how many commands each segment put in each list, which is what lets [`patch`] find them again. See [`SegmentRoot::commands`] for how the lists are joined.
 pub(crate) fn compose_into(
     seg: &Segment,
     strata: &mut [Vec<DrawCommand>; Stratum::COUNT],
     enclosing: Stratum,
 ) {
+    let before = strata.each_ref().map(Vec::len);
     seg.is_dirty.set(false);
+    seg.is_reshaped.set(false);
     let own_commands = seg.own_commands.borrow();
     let slots = seg.child_slots.borrow();
     let mut si = 0;
     for (i, (cmd, own)) in own_commands.iter().enumerate() {
         while si < slots.len() && slots[si].0 == i {
+            slots[si].1.stale.hang_under(&seg.stale);
             splice(&slots[si].1, strata, enclosing.max(slots[si].2));
             si += 1;
         }
         strata[enclosing.max(*own).index()].push(cmd.clone());
     }
     while si < slots.len() {
+        slots[si].1.stale.hang_under(&seg.stale);
         splice(&slots[si].1, strata, enclosing.max(slots[si].2));
         si += 1;
     }
+    seg.extent
+        .set(std::array::from_fn(|t| strata[t].len() - before[t]));
+    seg.stale.here.set(false);
 }
 
 fn splice(child: &Segment, strata: &mut [Vec<DrawCommand>; Stratum::COUNT], at: Stratum) {
     match child.composition.get() {
         Some(composition) => {
-            strata[at.index()].extend(child.composed().iter().cloned());
+            let frame = child.composed();
+            strata[at.index()].extend(frame.iter().cloned());
+            composition.spliced_len.set(frame.len());
             composition.unspliced.set(false);
         }
         None => compose_into(child, strata, at),
     }
 }
 
+/// A composed frame being brought up to date: the frame as it stood, page then fixed layers then overlays, where each stratum started in it, and the runs of it to replace, which are applied together once the walk is done.
+struct Patching<'a> {
+    commands: &'a mut Vec<DrawCommand>,
+    starts: [usize; Stratum::COUNT],
+    edits: Vec<Edit>,
+}
+
+/// The `old` commands from `at` in the frame as it stood, to be replaced by `new`.
+struct Edit {
+    at: usize,
+    old: usize,
+    new: Vec<DrawCommand>,
+}
+
+/// Where a patch has got to in each stratum: in the frame as it stood, and in the frame it is making.
+#[derive(Clone, Copy, Default)]
+struct Cursor {
+    old: [usize; Stratum::COUNT],
+    new: [usize; Stratum::COUNT],
+}
+
+impl Cursor {
+    fn step(&mut self, stratum: usize, old: usize, new: usize) {
+        self.old[stratum] += old;
+        self.new[stratum] += new;
+    }
+}
+
+impl Patching<'_> {
+    fn set(&mut self, stratum: usize, at: usize, command: DrawCommand) {
+        self.commands[self.starts[stratum] + at] = command;
+    }
+
+    fn replace(&mut self, stratum: usize, at: usize, old: usize, new: Vec<DrawCommand>) {
+        if old == 0 && new.is_empty() {
+            return;
+        }
+        self.edits.push(Edit {
+            at: self.starts[stratum] + at,
+            old,
+            new,
+        });
+    }
+
+    /// Applies every replacement: over the old commands where none changes the length, and otherwise in one pass that moves each command once, however many replacements there are.
+    fn apply(self, spare: &mut Vec<DrawCommand>) {
+        let Patching {
+            commands,
+            mut edits,
+            ..
+        } = self;
+        edits.sort_unstable_by_key(|edit| edit.at);
+        if edits.iter().all(|edit| edit.old == edit.new.len()) {
+            for edit in edits {
+                for (offset, command) in edit.new.into_iter().enumerate() {
+                    commands[edit.at + offset] = command;
+                }
+            }
+            return;
+        }
+        spare.clear();
+        let mut rest = commands.drain(..);
+        let mut taken = 0;
+        for edit in edits {
+            spare.extend(rest.by_ref().take(edit.at - taken));
+            rest.by_ref().take(edit.old).for_each(drop);
+            taken = edit.at + edit.old;
+            spare.extend(edit.new);
+        }
+        spare.extend(rest);
+        std::mem::swap(commands, spare);
+    }
+}
+
+/// Brings `seg`'s part of a composed frame up to date from `cursor`, leaving `cursor` past it: a subtree nothing changed in is stepped over, a segment whose commands only changed in value writes them over the old ones where they stand, and only a segment whose commands moved composes its subtree again.
+///
+/// What keeps a change to one widget on a page of thousands from costing a clone of every command on it. The frame stays one list, as the renderer reads it; a segment that changed length moves what follows it, which is a move and not a clone, and once per patch however many segments did.
+fn patch(seg: &Segment, enclosing: Stratum, cursor: &mut Cursor, frame: &mut Patching) {
+    let start = cursor.new;
+    if seg.is_reshaped.get() {
+        let old = seg.extent.get();
+        let mut fresh: [Vec<DrawCommand>; Stratum::COUNT] = Default::default();
+        compose_into(seg, &mut fresh, enclosing);
+        for (t, commands) in fresh.into_iter().enumerate() {
+            let len = commands.len();
+            frame.replace(t, cursor.old[t], old[t], commands);
+            cursor.step(t, old[t], len);
+        }
+        return;
+    }
+    if !any_dirty(seg) {
+        for (t, len) in seg.extent.get().into_iter().enumerate() {
+            cursor.step(t, len, len);
+        }
+        return;
+    }
+    let rewrite = seg.is_dirty.replace(false);
+    let own_commands = seg.own_commands.borrow();
+    let slots = seg.child_slots.borrow();
+    let mut si = 0;
+    for (i, (cmd, own)) in own_commands.iter().enumerate() {
+        while si < slots.len() && slots[si].0 == i {
+            slots[si].1.stale.hang_under(&seg.stale);
+            patch_child(&slots[si].1, enclosing.max(slots[si].2), cursor, frame);
+            si += 1;
+        }
+        let t = enclosing.max(*own).index();
+        if rewrite {
+            frame.set(t, cursor.old[t], cmd.clone());
+        }
+        cursor.step(t, 1, 1);
+    }
+    while si < slots.len() {
+        slots[si].1.stale.hang_under(&seg.stale);
+        patch_child(&slots[si].1, enclosing.max(slots[si].2), cursor, frame);
+        si += 1;
+    }
+    seg.extent
+        .set(std::array::from_fn(|t| cursor.new[t] - start[t]));
+    seg.stale.here.set(false);
+}
+
+fn patch_child(child: &Segment, at: Stratum, cursor: &mut Cursor, frame: &mut Patching) {
+    let Some(composition) = child.composition.get() else {
+        return patch(child, at, cursor, frame);
+    };
+    let t = at.index();
+    let old = composition.spliced_len.get();
+    if stale_for_parent(child) {
+        let spliced: Vec<DrawCommand> = child.composed().clone();
+        let len = spliced.len();
+        frame.replace(t, cursor.old[t], old, spliced);
+        composition.spliced_len.set(len);
+        composition.unspliced.set(false);
+        cursor.step(t, old, len);
+    } else {
+        cursor.step(t, old, old);
+    }
+}
+
 impl Segment {
-    /// This composition root's frame: its page, then its fixed layers, then its overlays. Recomposed only when something under it changed since the last read, whoever read it.
+    /// This composition root's frame: its page, then its fixed layers, then its overlays. Brought up to date only when something under it changed since the last read, whoever read it, and then only where it changed.
     fn composed(&self) -> Ref<'_, Vec<DrawCommand>> {
         let composition = self
             .composition
             .get()
             .expect("only a composition root has a frame of its own");
-        if !composition.valid.get() || any_dirty(self) {
+        if !composition.valid.get() {
             let mut cached = composition.commands.borrow_mut();
             cached.clear();
             // Hoisted content is routed aside during compose, then appended so it draws on top of, and outside any clip of, the main tree: the fixed layers, then the overlays over them.
             let mut strata: [Vec<DrawCommand>; Stratum::COUNT] = Default::default();
             strata[Stratum::Page.index()] = std::mem::take(&mut *cached);
             compose_into(self, &mut strata, Stratum::Page);
+            composition.lens.set(strata.each_ref().map(Vec::len));
             let [page, fixed, overlay] = strata;
             *cached = page;
             cached.extend(fixed);
             cached.extend(overlay);
-            drop(cached);
-            composition
-                .generation
-                .set(composition.generation.get().wrapping_add(1));
-            composition.valid.set(true);
-            composition.unspliced.set(true);
+        } else if any_dirty(self) {
+            let lens = composition.lens.get();
+            let mut cached = composition.commands.borrow_mut();
+            let mut frame = Patching {
+                commands: &mut cached,
+                starts: [0, lens[0], lens[0] + lens[1]],
+                edits: Vec::new(),
+            };
+            let mut cursor = Cursor::default();
+            patch(self, Stratum::Page, &mut cursor, &mut frame);
+            frame.apply(&mut composition.spare.borrow_mut());
+            composition.lens.set(cursor.new);
+        } else {
+            return composition.commands.borrow();
+        }
+        composition
+            .generation
+            .set(composition.generation.get().wrapping_add(1));
+        composition.valid.set(true);
+        composition.unspliced.set(true);
+        // Whoever splices this frame holds a copy of it, now out of date.
+        if let Some(above) = self.stale.above.borrow().clone() {
+            above.mark();
         }
         composition.commands.borrow()
     }
 }
 
-/// Whether any segment in the subtree has changed since the last compose. O(segments) — cheaper than a full O(commands) recompose, so it gates whether a recompose is needed.
+/// Whether any segment in the subtree has changed since the last compose. One flag, kept by every change marking the segments it is spliced under, so asking costs nothing however large the tree.
 fn any_dirty(seg: &Segment) -> bool {
-    if seg.is_dirty.get() {
-        return true;
+    seg.stale.here.get()
+}
+
+/// Whether a segment or anything spliced under it changed since it was last composed.
+#[derive(Default)]
+struct Stale {
+    here: Cell<bool>,
+    /// The flag of the segment that last spliced this one, which a change here marks too.
+    above: RefCell<Option<Rc<Stale>>>,
+}
+
+impl Stale {
+    /// Marks this segment and every segment it is spliced under, up to the first already marked: a marked segment's ancestors are all marked until a compose reaches them.
+    fn mark(&self) {
+        if self.here.replace(true) {
+            return;
+        }
+        let mut above = self.above.borrow().clone();
+        while let Some(at) = above {
+            if at.here.replace(true) {
+                return;
+            }
+            above = at.above.borrow().clone();
+        }
     }
-    seg.child_slots
-        .borrow()
-        .iter()
-        .any(|(_, child, _)| stale_for_parent(child))
+
+    fn hang_under(&self, parent: &Rc<Stale>) {
+        let mut above = self.above.borrow_mut();
+        if !above.as_ref().is_some_and(|at| Rc::ptr_eq(at, parent)) {
+            *above = Some(Rc::clone(parent));
+        }
+    }
 }
 
 fn stale_for_parent(child: &Segment) -> bool {
