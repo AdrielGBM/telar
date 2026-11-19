@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Key, NamedKey, Reactive, Role, signal};
+use telar::{Reactive, Role, signal};
 
 use super::sample;
 use crate::layout::reorder_zones::reorder_zones::DropPreview;
@@ -38,10 +38,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.drag(items.clone().named("Inbox"), 90.0, 0.0)?;
             sample::expect_names(canvas, &items, &["Drafts", "Inbox", "Sent", "Archive"])?;
             canvas.expect_action("on_move", 1)?;
-            canvas.click(items.clone().named("Archive"))?;
-            canvas.press(Key::Named(NamedKey::Space))?;
-            canvas.press(Key::Named(NamedKey::ArrowLeft))?;
-            canvas.press(Key::Named(NamedKey::Space))?;
+            let archive = canvas.find(&items.clone().named("Archive"))?.rect;
+            let sent = canvas.find(&items.clone().named("Sent"))?.rect;
+            let before_sent = sent.x + sent.width / 4.0 - (archive.x + archive.width / 2.0);
+            canvas.drag(items.clone().named("Archive"), before_sent, 0.0)?;
             sample::expect_names(canvas, &items, &["Drafts", "Inbox", "Archive", "Sent"])?;
             canvas.expect_action("on_move", 2)
         }),

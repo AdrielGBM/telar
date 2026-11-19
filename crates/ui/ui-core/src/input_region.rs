@@ -602,6 +602,10 @@ fn place(node: NodeId, shape: Shape, clipped: bool) -> Option<Shape> {
 }
 
 fn unplace(node: NodeId, x: f32, y: f32) -> Option<(f32, f32)> {
+    unplace_through(node, x, y, true)
+}
+
+fn unplace_through(node: NodeId, x: f32, y: f32, clipped: bool) -> Option<(f32, f32)> {
     let count = with_input_ref(|r| r.placements.get(&node).map_or(0, Vec::len));
     let mut point = (x, y);
     for index in (0..count).rev() {
@@ -623,7 +627,7 @@ fn unplace(node: NodeId, x: f32, y: f32) -> Option<(f32, f32)> {
                 None => point,
             },
             Placement::Clip(clip) => match clip() {
-                Some(clip) if !clip.contains(point.0, point.1) => return None,
+                Some(clip) if clipped && !clip.contains(point.0, point.1) => return None,
                 _ => point,
             },
         };
@@ -659,6 +663,51 @@ pub(crate) fn surface_rect(node: NodeId, local: Rect) -> Option<Rect> {
         local.height,
     );
     lift(node, rect, false).map(|shape| shape.bounds())
+}
+
+/// `point`, in the space `node`'s own children are laid out in, where the surface draws it: through `node`'s placements and every scroll and transform above it, unclipped.
+pub(crate) fn to_surface(node: NodeId, point: (f32, f32)) -> (f32, f32) {
+    let mut point = Point::new(point.0, point.1);
+    let mut at = Some(node);
+    while let Some(current) = at {
+        for index in 0.. {
+            let Some(placement) = placement_at(current, index) else {
+                break;
+            };
+            point = match placement {
+                Placement::Offset(offset) => {
+                    let (dx, dy) = offset();
+                    Point::new(point.x + dx, point.y + dy)
+                }
+                Placement::Transform(matrix) => match matrix() {
+                    Some(matrix) => matrix.apply(point),
+                    None => point,
+                },
+                Placement::Clip(_) => point,
+            };
+        }
+        at = geometric_parent(current);
+    }
+    (point.x, point.y)
+}
+
+/// The inverse of [`to_surface`]: a point on the surface in the space `node`'s children are laid out in. With `clipped`, `None` where a clip above `node` hides that point; without it, `None` only where a transform flattened the space.
+pub(crate) fn from_surface(node: NodeId, point: (f32, f32), clipped: bool) -> Option<(f32, f32)> {
+    let chain: Vec<NodeId> =
+        std::iter::successors(Some(node), |at| geometric_parent(*at)).collect();
+    chain.into_iter().rev().try_fold(point, |point, at| {
+        unplace_through(at, point.0, point.1, clipped)
+    })
+}
+
+/// The node `node` is drawn in: where [`to_surface`] climbs to from it.
+pub(crate) fn placed_in(node: NodeId) -> Option<NodeId> {
+    geometric_parent(node)
+}
+
+/// How many nodes deep `node` is drawn, out to the surface: a node drawn inside another is deeper than it.
+pub(crate) fn placement_depth(node: NodeId) -> usize {
+    std::iter::successors(Some(node), |at| geometric_parent(*at)).count()
 }
 
 /// [`visible_rect`] grown by the node's hit outset: where the pointer finds the box, and so the target a reader and a target-size check are told about.

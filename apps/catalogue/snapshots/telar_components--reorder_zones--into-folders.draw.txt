@@ -1,0 +1,62 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element list
+          element group
+            element listitem
+              rect 358,249 84x29
+              element group
+                rect 358,249 84x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                element group
+                  matrix 1,0,0,1,370,255
+                    text 0,0 60x16.8 "Drafts (1)" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                  end
+                end
+              end
+              element group
+                element group
+                end
+              end
+            end
+            element listitem
+              rect 358,286 84x28
+              element group
+                rect 358,286 84x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                element group
+                  matrix 1,0,0,1,370,292
+                    text 0,0 60x16.8 "Inbox (0)" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                  end
+                end
+              end
+              element group
+                element group
+                end
+              end
+            end
+            element listitem
+              rect 358,323 84x29
+              element group
+                rect 358,323 84x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                element group
+                  matrix 1,0,0,1,370,329
+                    text 0,0 60x16.8 "notes.txt" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                  end
+                end
+              end
+              element group
+                element group
+                end
+              end
+            end
+          end
+          element group
+            rect 358,249 84x2
+          end
+        end
+      end
+    end
+  end
+end

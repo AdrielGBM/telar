@@ -1,0 +1,49 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element list
+            element group
+              element listitem
+                rect 341,249 57x29
+                element group
+                  rect 341,249 57x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  element group
+                    matrix 1,0,0,1,353,255
+                      text 0,0 33x16.8 "Draft" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    end
+                  end
+                end
+              end
+              element listitem
+                rect 406,249 53x29
+                element group
+                  rect 406,249 53x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  element group
+                    matrix 1,0,0,1,418,255
+                      text 0,0 29.23x16.8 "Ship" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              rect 341,249 2x29
+            end
+          end
+          element group
+            rect 341,302 118x49
+            element group
+              matrix 1,0,0,1,357,318
+                text 0,0 86x16.8 "Binned: 1" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

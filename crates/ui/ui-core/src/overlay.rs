@@ -330,6 +330,7 @@ impl OverlaySink for OverlaySinkImpl {
 /// Variants (all portal the same way, they differ in how they route clicks and where the content sits):
 /// - [`Overlay::new`] — modal: blocks every click inside its content rect (a full-viewport scrim), holds the keyboard inside itself, and marks its top boxes [`Modal`](renderer_core::Modal), so a document makes the rest of the surface inert while it shows.
 /// - [`Overlay::anchored_click_through`] — positions the content next to a trigger widget (dropdowns, menus, tooltips) and takes no pointer, so clicks anywhere fall through to the tree behind.
+/// - [`Overlay::click_through`] — fills the viewport like a modal and takes no pointer, so whatever its content places anywhere on the surface leaves the tree behind it usable.
 pub struct Overlay {
     // Handed to the DOM parent: an empty placeholder when portaled, the content itself otherwise.
     layout_node: NodeId,
@@ -364,6 +365,14 @@ impl Overlay {
         visible: impl Fn() -> bool + 'static,
     ) -> Result<Self, LayoutError> {
         Self::build(layout_style, children, true, None, Rc::new(visible))
+    }
+
+    /// A portal whose content fills the viewport, as a modal's does, but takes no pointer of its own: an event reaches what is behind it unless a child of the content handles it. For something drawn over the whole surface that only follows what the user does, such as the label carried with a drag.
+    pub fn click_through(
+        layout_style: LayoutStyle,
+        children: Vec<Box<dyn LayoutItem>>,
+    ) -> Result<Self, LayoutError> {
+        Self::build(layout_style, children, false, None, Rc::new(|| true))
     }
 
     /// A portal whose content is positioned next to `trigger` (a dropdown/menu/tooltip popping up by its button) and takes no pointer: a tooltip bubble, a hint, anything that appears because the pointer is *near* it and would be dismissed by touching it. The content sizes to its intrinsic panel and is translated to the trigger's rect per `placement` — the rect it is drawn at, so a trigger moved by a transform or a scroll still gets its panel beside it.

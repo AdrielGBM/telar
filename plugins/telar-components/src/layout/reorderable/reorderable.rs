@@ -1,11 +1,11 @@
-//! [`reorderable`]: a single list whose items are dragged, or moved with the keyboard, into a different order.
+//! [`reorderable`]: a single list whose items are dragged, or stepped with the keyboard, into a different order.
 
 use std::rc::Rc;
 
-use telar::{Handler, LayoutError, LayoutItem, Props, Reactive};
+use telar::{DragSession, DropPlace, Handler, LayoutError, LayoutItem, Props, Reactive};
 
 use crate::layout::reorder_zones::reorder_zones::{
-    DropPreview, ItemBuilder, Reach, ReorderGroup, ReorderZoneProps,
+    DropPreview, ItemBuilder, Reach, ReorderGroup, ReorderZoneProps, Slot,
 };
 
 /// A list of items the user can drag into a different order.
@@ -35,9 +35,9 @@ pub struct ReorderableProps {
     pub drop_preview: DropPreview,
 }
 
-/// A list whose items are reordered in place: a [`ReorderGroup`] of one container, whose moves are reported as positions in that container.
+/// A list whose items are reordered in place: a [`ReorderGroup`] of one container in a session of its own, whose moves are reported as positions in that container.
 ///
-/// The list is announced as a list and each item as a list item that takes focus. An item is dragged along the list's axis, never past its ends; from the keyboard, Space or Enter picks the focused item up, the arrow keys move it a slot at a time, Space or Enter drops it, and Escape (or focus leaving it) puts it back.
+/// The list is announced as a list and each item as a list item that takes focus. An item is dragged along the list's axis, never past its ends, and Escape mid-drag puts it back; from the keyboard, Alt+↑ and Alt+↓ move the focused item one place earlier or later.
 pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ReorderableProps {
         count,
@@ -48,11 +48,15 @@ pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, Layou
         drag_threshold,
         drop_preview,
     } = props;
-    ReorderGroup::new()
+    ReorderGroup::new(&DragSession::new(), |slot| slot)
         .reach(Reach::OwnZone)
         .drop_preview(drop_preview)
         .drag_threshold(drag_threshold)
-        .on_move(move |from, to| on_move.run(from.index, to.index))
+        .on_drop(move |from: Slot, to| {
+            if let DropPlace::Between(to) = to {
+                on_move.run(from.index, to.index);
+            }
+        })
         .zone(
             ReorderZoneProps::props()
                 .count(count)

@@ -2,6 +2,7 @@
 //!
 //! **The rule.** A component takes every length, corner, border, wash and weight from a function here (or from its own `XTokens`, which default to one of these), never from a literal or from a primitive token scaled by a factor of its own. Two components that draw the same kind of thing then cannot disagree, and a theme or a size moves them together. The subset an application needs to draw controls of its own that sit beside the catalogue's is public as [`crate::metrics`].
 
+pub(crate) mod drag_label;
 pub(crate) mod dropdown;
 pub(crate) mod edit;
 pub(crate) mod popup;

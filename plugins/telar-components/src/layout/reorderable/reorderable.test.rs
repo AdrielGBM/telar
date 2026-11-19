@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::preview::{Play, PreviewCtx, PreviewEntry, by_role};
-use telar::testing::{lay_out_row, moved, press, release, route};
+use telar::testing::{hold, lay_out_row, moved, press, release, route};
 use telar::{
     Component, Key, LayoutItem, LayoutStyle, NamedKey, RectStyle, RwSignal, StyledContainer, Text,
     box_item, focus::Role, signal,
@@ -116,6 +116,13 @@ fn key(play: &mut Play, key: NamedKey) {
     play.press(Key::Named(key)).unwrap();
 }
 
+/// `key` pressed with Alt held.
+fn step(play: &mut Play, key: NamedKey) {
+    hold(false, true);
+    play.press(Key::Named(key)).unwrap();
+    hold(false, false);
+}
+
 /// The items' names in the order a reader meets them.
 fn read_order(play: &Play) -> Vec<String> {
     play.find_all(&by_role(Role::ListItem))
@@ -156,14 +163,12 @@ fn the_list_and_its_items_are_announced_as_such() {
 }
 
 #[test]
-fn the_keyboard_picks_an_item_up_moves_it_and_drops_it() {
+fn alt_down_steps_the_focused_item_one_place_later() {
     let mut play = played(gap_strip);
     play.click(item("Inbox")).unwrap();
     play.expect_focused(item("Inbox")).unwrap();
 
-    key(&mut play, NamedKey::Space);
-    key(&mut play, NamedKey::ArrowRight);
-    key(&mut play, NamedKey::Space);
+    step(&mut play, NamedKey::ArrowDown);
 
     assert_eq!(
         moves(&play),
@@ -171,30 +176,22 @@ fn the_keyboard_picks_an_item_up_moves_it_and_drops_it() {
         "past `Drafts`, skipping the slot it already fills"
     );
     assert_eq!(read_order(&play), ["Drafts", "Inbox", "Sent", "Archive"]);
+    play.expect_focused(item("Inbox")).unwrap();
 }
 
 #[test]
-fn escape_puts_a_keyboard_pickup_back() {
+fn enter_and_space_are_left_to_the_caller() {
     let mut play = played(gap_strip);
     play.click(item("Drafts")).unwrap();
 
     key(&mut play, NamedKey::Enter);
     key(&mut play, NamedKey::ArrowRight);
-    key(&mut play, NamedKey::ArrowRight);
-    key(&mut play, NamedKey::Escape);
+    key(&mut play, NamedKey::Space);
+    key(&mut play, NamedKey::ArrowLeft);
 
     assert!(moves(&play).is_empty());
     assert_eq!(read_order(&play), NAMES);
-    assert_eq!(
-        drawn_order(&play),
-        NAMES,
-        "nothing is left drawn out of place"
-    );
-
-    key(&mut play, NamedKey::Enter);
-    key(&mut play, NamedKey::ArrowLeft);
-    key(&mut play, NamedKey::Enter);
-    assert_eq!(moves(&play), [["1", "0"]], "the next pickup starts afresh");
+    assert_eq!(drawn_order(&play), NAMES, "nothing was picked up");
 }
 
 #[test]
@@ -202,20 +199,16 @@ fn the_keyboard_stops_at_the_ends_of_the_list() {
     let mut play = played(gap_strip);
     play.click(item("Inbox")).unwrap();
 
-    key(&mut play, NamedKey::Space);
-    key(&mut play, NamedKey::ArrowLeft);
-    key(&mut play, NamedKey::Space);
+    step(&mut play, NamedKey::ArrowUp);
     assert!(
         moves(&play).is_empty(),
         "before the first slot is still the first slot"
     );
 
-    key(&mut play, NamedKey::Space);
     for _ in 0..8 {
-        key(&mut play, NamedKey::ArrowDown);
+        step(&mut play, NamedKey::ArrowDown);
     }
-    key(&mut play, NamedKey::Space);
-    assert_eq!(moves(&play), [["0", "4"]]);
+    assert_eq!(moves(&play), [["0", "2"], ["1", "3"], ["2", "4"]]);
     assert_eq!(read_order(&play), ["Drafts", "Sent", "Archive", "Inbox"]);
 }
 
@@ -244,13 +237,26 @@ fn escape_mid_drag_puts_the_item_back() {
     assert_eq!(items.peek(), vec!['a', 'b', 'c', 'd']);
 }
 
+/// Presses on `name` and carries it `dx` along the strip without letting go, answering where the pointer is left.
+fn carry(play: &mut Play, name: &str, dx: f32) -> (f64, f64) {
+    let at = play.find(&item(name)).unwrap().rect;
+    let (x, y) = (
+        f64::from(at.x + at.width / 2.0),
+        f64::from(at.y + at.height / 2.0),
+    );
+    let canvas = Rc::clone(play.canvas());
+    canvas.dispatch_own(&moved(x, y));
+    canvas.dispatch_own(&press(x, y));
+    canvas.dispatch_own(&moved(x + f64::from(dx) / 2.0, y));
+    canvas.dispatch_own(&moved(x + f64::from(dx), y));
+    play.settle().unwrap();
+    (x + f64::from(dx), y)
+}
+
 #[test]
 fn with_a_gap_the_list_shows_the_order_the_drop_would_leave() {
     let mut play = played(gap_strip);
-    play.click(item("Inbox")).unwrap();
-    key(&mut play, NamedKey::Space);
-    key(&mut play, NamedKey::ArrowRight);
-    key(&mut play, NamedKey::ArrowRight);
+    carry(&mut play, "Inbox", 2.5 * ITEM);
 
     assert_eq!(drawn_order(&play), ["Drafts", "Sent", "Inbox", "Archive"]);
     assert!(moves(&play).is_empty(), "nothing is moved until the drop");
@@ -260,19 +266,16 @@ fn with_a_gap_the_list_shows_the_order_the_drop_would_leave() {
 #[test]
 fn with_a_line_nothing_moves_until_the_drop() {
     let mut play = played(line_strip);
-    play.click(item("Inbox")).unwrap();
     assert!(
         !draws_an_insertion_line(&play),
         "no line with nothing in hand"
     );
-    key(&mut play, NamedKey::Space);
-    key(&mut play, NamedKey::ArrowRight);
-    key(&mut play, NamedKey::ArrowRight);
-
-    assert_eq!(drawn_order(&play), NAMES);
+    let (x, y) = carry(&mut play, "Inbox", 2.5 * ITEM);
+    assert!(moves(&play).is_empty(), "nothing is moved until the drop");
     assert!(draws_an_insertion_line(&play));
 
-    key(&mut play, NamedKey::Space);
+    play.canvas().dispatch_own(&release(x, y));
+    play.settle().unwrap();
     assert_eq!(moves(&play), [["0", "3"]]);
     assert!(
         !draws_an_insertion_line(&play),

@@ -8,71 +8,70 @@ element group
           element list
             element group
               element listitem
-                rect 324,249 71x29 border=2 border-color=#4261edff
-                rect 326,251 67x25 border=1 border-color=#ffffffff
+                rect 317,230 72x29
                 element group
-                  rect 324,249 71x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  rect 317,230 72x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
                   element group
-                    matrix 1,0,0,1,336,255
-                      text 0,0 47.33x16.8 "Review" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
-                    end
-                  end
-                end
-              end
-              element listitem
-                rect 324,286 71x28
-                element group
-                  rect 324,286 71x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
-                  element group
-                    matrix 1,0,0,1,336,292
-                      text 0,0 47.33x16.8 "Design" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    matrix 1,0,0,1,329,236
+                      text 0,0 48x16.8 "Review" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                     end
                   end
                 end
               end
             end
             element group
-              rect 324,249 71x2
+              rect 317,230 72x2
             end
           end
           element list
             element group
               element listitem
-                rect 419,249 57x29
+                rect 412,230 70x29
                 element group
-                  rect 419,249 57x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  rect 412,230 70x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
                   element group
-                    matrix 1,0,0,1,431,255
-                      text 0,0 33x16.8 "Build" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    matrix 1,0,0,1,424,236
+                      text 0,0 46x16.8 "Build" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                     end
                   end
                 end
               end
               element listitem
-                rect 419,286 57x28
+                rect 412,267 70x29
                 element group
-                  rect 419,286 57x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  rect 412,267 70x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
                   element group
-                    matrix 1,0,0,1,431,292
-                      text 0,0 33x16.8 "Test" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    matrix 1,0,0,1,424,273
+                      text 0,0 46x16.8 "Design" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                     end
                   end
                 end
               end
               element listitem
-                rect 419,323 57x29
+                rect 412,304 70x29
                 element group
-                  rect 419,323 57x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  rect 412,304 70x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
                   element group
-                    matrix 1,0,0,1,431,329
-                      text 0,0 33x16.8 "Ship" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    matrix 1,0,0,1,424,310
+                      text 0,0 46x16.8 "Test" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    end
+                  end
+                end
+              end
+              element listitem
+                rect 412,340 70x29
+                element group
+                  rect 412,340 70x29 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+                  element group
+                    matrix 1,0,0,1,424,346
+                      text 0,0 46x16.8 "Ship" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                     end
                   end
                 end
               end
             end
             element group
-              rect 419,249 57x2
+              rect 412,230 70x2
             end
           end
         end

@@ -867,6 +867,13 @@ impl ScrollViewport {
             .then(|| (content.height - viewport.height).max(0.0))
     }
 
+    /// How far the view can be scrolled across and down, from the content and the viewport as last laid out, without subscribing; `None` before both have been.
+    pub(crate) fn peek_ranges(&self) -> Option<(f32, f32)> {
+        let content = self.content.get()?.peek();
+        let viewport = self.rect.peek();
+        (content.height > 0.0 && viewport.height > 0.0).then(|| scroll_ranges(viewport, content))
+    }
+
     /// Where this viewport is scrolled to right now, without subscribing.
     pub fn peek_offset(&self) -> (f32, f32) {
         (self.set_x.peek(), self.set_y.peek())

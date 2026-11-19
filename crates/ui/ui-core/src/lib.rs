@@ -24,6 +24,7 @@ pub mod dismiss;
 mod disposal;
 mod drag;
 mod drag_drop;
+mod drag_session;
 mod element;
 mod error_boundary;
 mod fixed_layer;
@@ -133,6 +134,7 @@ pub use dismiss::{
 pub use disposal::OwnedBuild;
 pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use drag_drop::DropTarget;
+pub use drag_session::{AreaLayout, DragItem, DragSession, DropArea, DropAreaId, DropPlace};
 pub use error_boundary::{BuildFailure, ErrorBoundary};
 pub use fixed_layer::FixedLayer;
 pub use focus_ring::{FocusRing, focus_ring};
