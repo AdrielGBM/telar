@@ -1,7 +1,7 @@
 use telar::preview::{PreviewCtx, PreviewEntry};
 use telar::{
-    AccessNode, App, Component, ComponentList, DrawCommand, LayoutError, LayoutItem, Reactive,
-    Rect, Role, WindowRoot, for_each_with_matrix, relayout_if_dirty, transform_clip_rect,
+    AccessNode, App, ComponentList, DrawCommand, LayoutError, LayoutItem, Reactive, Rect, Role,
+    for_each_with_matrix, relayout_if_dirty, transform_clip_rect,
 };
 use telar_components::{ButtonProps, TagProps, button, tag};
 use telar_devtools::workbench_scope;
@@ -15,10 +15,10 @@ pub struct Shell {
 }
 
 impl App for Shell {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         let chrome =
             workbench_scope(|| crate::shell::shell(&self.state, None)).expect("the chrome builds");
-        Box::new(WindowRoot::wrapping(Box::new(chrome)).expect("the window builds"))
+        Box::new(chrome)
     }
 }
 

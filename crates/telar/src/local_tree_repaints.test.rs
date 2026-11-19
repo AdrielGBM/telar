@@ -5,23 +5,9 @@
 //! This is the claim that replaced them, on the two things a frame depends on: the state a widget reads, and the layout it is placed by. The hot-reload half was checked the only way it can be — a `cargo telar dev` session with both calls removed, editing an `.rsx` and watching the window take the change.
 
 use telar::{
-    Color, Component, DrawCommand, EventResult, LayoutItem, LayoutStyle, LocalTree, RectStyle,
-    Rectangle, RenderNode, ShapeStyle, SizeDimension, Text, TextStyle, UiTree, WindowRoot,
-    box_item, reset_layout_runtime, signal,
+    Color, DrawCommand, LayoutStyle, LocalTree, RectStyle, Rectangle, ShapeStyle, SizeDimension,
+    Text, TextStyle, UiTree, box_item, reset_layout_runtime, signal,
 };
-
-struct Root(Box<dyn LayoutItem>);
-impl Component for Root {
-    fn view(&self) -> RenderNode {
-        self.0.view()
-    }
-    fn on_event(&mut self, _: &platform_core::Event) -> EventResult {
-        EventResult::Ignored
-    }
-    fn debug_name(&self) -> &'static str {
-        "LocalRoot"
-    }
-}
 
 fn drawn_text(tree: &LocalTree) -> String {
     tree.frame()
@@ -55,7 +41,7 @@ fn a_changed_signal_repaints_without_being_told_to() {
         || TextStyle::new(14.0, Color::BLACK),
     )
     .unwrap();
-    let tree = LocalTree::new(|| Box::new(Root(box_item(text))));
+    let tree = LocalTree::new(|| box_item(text));
 
     assert_eq!(drawn_text(&tree), "before");
     label.set("after".to_string());
@@ -63,7 +49,7 @@ fn a_changed_signal_repaints_without_being_told_to() {
     assert_eq!(drawn_text(&tree), "after");
 }
 
-/// The harder half: a resize changes no signal the widget reads, only the rect it is placed at. A segment that took its rect without subscribing would keep drawing at the old one, which is the failure the force tick was covering for. Driven through a `WindowRoot`, which is what turns a resize into a layout.
+/// The harder half: a resize changes no signal the widget reads, only the rect it is placed at. A segment that took its rect without subscribing would keep drawing at the old one, which is the failure the force tick was covering for. Driven through the root every window's tree is mounted on, which is what turns a resize into a layout.
 #[test]
 fn a_resize_repaints_without_being_told_to() {
     reset_layout_runtime();
@@ -74,7 +60,7 @@ fn a_resize_repaints_without_being_told_to() {
         || RectStyle::default().with_fill(Color::BLACK),
     )
     .unwrap();
-    let mut tree = LocalTree::new(|| Box::new(WindowRoot::new(box_item(boxed))));
+    let mut tree = LocalTree::new(|| box_item(boxed));
 
     tree.on_event(&platform_core::Event::WindowResized {
         width: 400,

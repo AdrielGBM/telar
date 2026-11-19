@@ -12,10 +12,8 @@ use common::assert_center_rgb;
 use platform_headless::{FrameSink, HeadlessPlatform};
 use telar::NoPaths;
 use telar::{
-    App, AppConfig, AppCtx, AppPathsProvider, AvailableSpace, Color, Component, Event, EventResult,
-    LayoutItem, LayoutStyle, NodeId, ReadSignal, RectStyle, Rectangle, RenderNode, RwSignal,
-    SizeDimension, compute_layout, mark_dirty, new_container, reset_layout_runtime,
-    run_with_platform, signal, spawn_task,
+    App, AppConfig, AppCtx, AppPathsProvider, Color, LayoutItem, LayoutStyle, RectStyle, Rectangle,
+    RwSignal, SizeDimension, reset_layout_runtime, run_with_platform, signal, spawn_task,
 };
 
 const INITIAL: [u8; 3] = [200, 40, 40];
@@ -23,52 +21,6 @@ const FROM_TASK: [u8; 3] = [40, 200, 40];
 
 // Enough frames (paced at 60fps by the headless platform) for a worker returning a constant to finish and be drained several times over.
 const FRAMES: u32 = 60;
-
-struct SignalFillRoot {
-    root: NodeId,
-    rect: Rectangle,
-}
-
-impl SignalFillRoot {
-    fn new(color: ReadSignal<Color>) -> Self {
-        // Read inside the style closure, which `view()` re-runs under the segment's effect: that subscription is what turns the task's signal write into a repaint.
-        let rect = Rectangle::new(
-            LayoutStyle::new()
-                .width(SizeDimension::Percent(1.0))
-                .height(SizeDimension::Percent(1.0)),
-            move || RectStyle::filled(color.get(), 0.0),
-        )
-        .unwrap();
-        let root = new_container(
-            LayoutStyle::new()
-                .width(SizeDimension::Percent(1.0))
-                .height(SizeDimension::Percent(1.0)),
-            &[rect.layout_node()],
-        )
-        .unwrap();
-        Self { root, rect }
-    }
-}
-
-impl Component for SignalFillRoot {
-    fn view(&self) -> RenderNode {
-        self.rect.view()
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        if let Event::WindowResized { width, height } = event {
-            mark_dirty(self.root).ok();
-            compute_layout(
-                self.root,
-                AvailableSpace::Definite(*width as f32),
-                AvailableSpace::Definite(*height as f32),
-            )
-            .ok();
-            return EventResult::Handled;
-        }
-        EventResult::Ignored
-    }
-}
 
 /// Fills its window with a color that only a background task can produce.
 struct TaskApp {
@@ -78,12 +30,21 @@ struct TaskApp {
 }
 
 impl App for TaskApp {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         reset_layout_runtime();
         let color = signal(Color::from_rgb_u8(INITIAL[0], INITIAL[1], INITIAL[2]));
         let read = color.read_only();
         *self.color.borrow_mut() = Some(color);
-        Box::new(SignalFillRoot::new(read))
+        // Read inside the style closure, which `view()` re-runs under the segment's effect: that subscription is what turns the task's signal write into a repaint.
+        Box::new(
+            Rectangle::new(
+                LayoutStyle::new()
+                    .width(SizeDimension::Percent(1.0))
+                    .height(SizeDimension::Percent(1.0)),
+                move || RectStyle::filled(read.get(), 0.0),
+            )
+            .unwrap(),
+        )
     }
 
     fn clear_color(&self) -> Option<Color> {

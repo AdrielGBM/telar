@@ -76,6 +76,7 @@ mod styled_container;
 mod surface;
 mod surface_canvas;
 mod surface_context;
+mod surface_fade;
 mod surface_font;
 mod surface_frame;
 mod surface_style;
@@ -199,6 +200,7 @@ pub use surface_canvas::{
     NestedCanvas, SurfaceCanvas, SurfaceEnv, composite_surface, follow_box_event,
 };
 pub use surface_context::Surface;
+pub use surface_fade::SurfaceFade;
 pub use surface_font::{open_surface_font_family, set_font_family, use_font_family};
 pub use surface_frame::SurfaceFrame;
 pub use surface_style::{SurfaceAmendment, SurfaceStyle, amend_surface};

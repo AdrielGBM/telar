@@ -8,27 +8,15 @@ use renderer_core::TextWrap;
 use std::num::NonZeroU16;
 use telar::testing::mount;
 use telar::{
-    Color, Component, Container, DrawCommand, FontFamily, LayoutItem, LayoutStyle, Raster,
-    RenderNode, Text, TextAlign, TextStyle, box_item,
+    Color, Container, DrawCommand, FontFamily, LayoutItem, LayoutStyle, Raster, Text, TextAlign,
+    TextStyle, box_item,
 };
 
 /// A tree of one text, mounted and drawn, with the style it actually resolved to.
 fn resolved(build: impl FnOnce() -> Box<dyn LayoutItem>) -> TextStyle {
-    struct Root(Box<dyn LayoutItem>);
-    impl Component for Root {
-        fn view(&self) -> RenderNode {
-            self.0.view()
-        }
-        fn on_event(&mut self, _: &platform_core::Event) -> ui_core::EventResult {
-            ui_core::EventResult::Ignored
-        }
-        fn debug_name(&self) -> &'static str {
-            "BaselineRoot"
-        }
-    }
     // A tree measures its text as it lays out, and a test has no runner to have opened a measurer or chosen its faces.
     telar::testing::install_test_face();
-    let tree = mount(|| Root(build()), 400, 200);
+    let tree = mount(build, 400, 200);
     let style = tree.commands().iter().find_map(|c| match c {
         DrawCommand::Text { style, .. } => Some((**style).clone()),
         _ => None,
@@ -172,19 +160,6 @@ fn a_container_declares_the_text_below_it() {
 fn a_container_can_say_what_the_text_below_it_looks_like() {
     telar::testing::install_test_face();
 
-    struct Root(Box<dyn LayoutItem>);
-    impl Component for Root {
-        fn view(&self) -> RenderNode {
-            self.0.view()
-        }
-        fn on_event(&mut self, _: &platform_core::Event) -> ui_core::EventResult {
-            ui_core::EventResult::Ignored
-        }
-        fn debug_name(&self) -> &'static str {
-            "DeclaringRoot"
-        }
-    }
-
     let leaf = Text::declaring(|| "inherits".to_string(), LayoutStyle::new(), |t| t).unwrap();
     let outer = Container::new(LayoutStyle::new().flex_column(), vec![box_item(leaf)]).unwrap();
     let outer_node = outer.layout_node();
@@ -195,7 +170,7 @@ fn a_container_can_say_what_the_text_below_it_looks_like() {
             .with_font_weight(700),
     );
 
-    let tree = mount(|| Root(box_item(outer)), 400, 200);
+    let tree = mount(|| outer, 400, 200);
     let drawn = |tree: &ui_core::ComponentList| {
         tree.commands()
             .iter()

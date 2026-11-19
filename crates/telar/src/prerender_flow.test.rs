@@ -7,10 +7,10 @@ use std::sync::Arc;
 use platform_headless::HeadlessPlatform;
 use renderer_record::{Recording, RecordingFactory};
 use telar::{
-    App, AppConfig, AppPathsProvider, Color, Component, Container, LayoutStyle, Location,
+    App, AppConfig, AppPathsProvider, Color, Container, LayoutItem, LayoutStyle, Location,
     LocationFormat, NoPaths, RectStyle, Role, SizeDimension, StyledContainer, SystemPreferences,
-    Text, TextStyle, WindowRoot, follow_location_locale, hot_signal, location_history,
-    prerender_page, reset_layout_runtime, run_with_platform_and_renderer,
+    Text, TextStyle, follow_location_locale, hot_signal, location_history, prerender_page,
+    reset_layout_runtime, run_with_platform_and_renderer,
 };
 use telar_project::{
     PageLocation, PageRequest, Preferences, PrerenderRequest, PrerenderedPage, Surface,
@@ -25,7 +25,7 @@ const BASE: &str = "/site/";
 struct Site;
 
 impl App for Site {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         reset_layout_runtime();
         let page = location_history().last().cloned().unwrap_or_default();
         let visits = hot_signal("site::visits", 3u32);
@@ -66,7 +66,7 @@ impl App for Site {
         )
         .unwrap()
         .role(Role::Main);
-        Box::new(WindowRoot::new(Box::new(main)))
+        Box::new(main)
     }
 
     fn clear_color(&self) -> Option<Color> {

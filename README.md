@@ -65,7 +65,7 @@ my-app/
   src/main.rs     # fn main() { my_app::run(); }
   src/lib.rs      # telar::app!(…) — theme, startup hook, config, root
   src/theme.rs    # the design tokens every component reads
-  src/app.rs      # the root component
+  src/app.rs      # the window's content
   src/home.rsx    # one page
 ```
 
@@ -92,6 +92,8 @@ title = "my-app"
 width = 1000
 height = 700
 ```
+
+`app::Root` answers `App::root` with the window's content, and every runner lays it out against the window, so a box sized `Percent(1.0)` or left at its auto size fills it.
 
 </details>
 

@@ -3,8 +3,8 @@ use telar::testing::{
     Scoped, centre, find_text, key_with, mount, named, press, release, route, texts,
 };
 use telar::{
-    AccessNode, App, AppRuntime, Component, ComponentList, Container, Event, LayoutStyle, LocalApp,
-    PointerSource, Rect, WindowRoot, reset_layout_runtime,
+    AccessNode, App, AppRuntime, ComponentList, Container, Event, LayoutStyle, LocalApp,
+    PointerSource, Rect, reset_layout_runtime,
 };
 
 use super::*;
@@ -33,8 +33,8 @@ struct Workshop {
 }
 
 impl App for Workshop {
-    fn root(&self) -> Box<dyn Component> {
-        Box::new(WindowRoot::wrapping(sidebar(&self.state).unwrap()).unwrap())
+    fn root(&self) -> Box<dyn LayoutItem> {
+        sidebar(&self.state).unwrap()
     }
 }
 

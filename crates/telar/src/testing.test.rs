@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use layout_core::LayoutStyle;
 use renderer_core::RectStyle;
-use ui_core::{FixedLayer, StyledContainer, WindowRoot, box_item};
+use ui_core::{FixedLayer, StyledContainer, box_item};
 
 use super::*;
 
@@ -22,11 +22,10 @@ fn page_under_a_bar(hovered: &Rc<Cell<bool>>) -> Scoped<ComponentList> {
             let bar = plain(LayoutStyle::new().width(200.0).height(40.0), vec![]);
             let layer = FixedLayer::new(LayoutStyle::new().flex_column(), vec![box_item(bar)])
                 .expect("a layer builds");
-            let root = plain(
+            plain(
                 LayoutStyle::new().flex_column().width(200.0).height(200.0),
                 vec![box_item(page), box_item(layer)],
-            );
-            WindowRoot::new(box_item(root))
+            )
         },
         200,
         200,

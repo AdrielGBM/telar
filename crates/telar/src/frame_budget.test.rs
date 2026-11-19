@@ -8,8 +8,8 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 use telar::{
-    Color, Component, LayoutStyle, LocalTree, RectStyle, Rectangle, SizeDimension, Text, TextStyle,
-    UiTree, new_container, reset_layout_runtime, signal,
+    Color, Container, LayoutItem, LayoutStyle, LocalTree, RectStyle, Rectangle, SizeDimension,
+    Text, TextStyle, UiTree, reset_layout_runtime, signal,
 };
 
 // Per thread, not per process: the tests in this binary run concurrently, and a shared counter would charge one test's frames to whichever other one happens to be measuring.
@@ -48,7 +48,7 @@ fn measure(mut body: impl FnMut()) -> usize {
 }
 
 /// A game's chrome: a few static panels around a counter that changes every frame. Deliberately not big — the question is whether a frame's cost is *stable*, and a small tree makes a per-frame allocation stand out instead of hiding inside a large one.
-fn chrome() -> (Box<dyn Component>, telar::RwSignal<i32>) {
+fn chrome() -> (Box<dyn LayoutItem>, telar::RwSignal<i32>) {
     reset_layout_runtime();
     let ticks = signal(0);
 
@@ -59,7 +59,7 @@ fn chrome() -> (Box<dyn Component>, telar::RwSignal<i32>) {
     )
     .expect("text builds");
 
-    let mut children: Vec<Box<dyn telar::LayoutItem>> = vec![Box::new(counter)];
+    let mut children: Vec<Box<dyn LayoutItem>> = vec![Box::new(counter)];
     for _ in 0..8 {
         children.push(Box::new(
             Rectangle::new(LayoutStyle::new().width(40.0).height(12.0), || {
@@ -69,43 +69,15 @@ fn chrome() -> (Box<dyn Component>, telar::RwSignal<i32>) {
         ));
     }
 
-    let nodes: Vec<telar::NodeId> = children.iter().map(|c| c.layout_node()).collect();
-    let root = new_container(
+    let root = Container::new(
         LayoutStyle::new()
             .flex_column()
             .width(SizeDimension::Percent(1.0))
             .height(SizeDimension::Percent(1.0)),
-        &nodes,
+        children,
     )
     .expect("container builds");
-    let _ = root;
-
-    struct Chrome {
-        children: Vec<Box<dyn telar::LayoutItem>>,
-    }
-
-    impl Component for Chrome {
-        fn view(&self) -> telar::RenderNode {
-            telar::RenderNode::Group {
-                children: telar::NodeVec::collect(self.children.iter().map(|c| c.view())),
-            }
-        }
-
-        fn on_event(&mut self, event: &telar::Event) -> telar::EventResult {
-            for child in &mut self.children {
-                if child.on_event(event) == telar::EventResult::Handled {
-                    return telar::EventResult::Handled;
-                }
-            }
-            telar::EventResult::Ignored
-        }
-
-        fn debug_name(&self) -> &'static str {
-            "Chrome"
-        }
-    }
-
-    (Box::new(Chrome { children }), ticks)
+    (Box::new(root), ticks)
 }
 
 /// An unchanged tree must cost nothing to ask again — that is the whole point of the dirty gate, and the case a viewport hits constantly: its texture changes, its commands do not.

@@ -13,7 +13,7 @@ use geometry_core::Rect;
 use renderer_core::DrawCommand;
 use renderer_core::culling::{FontMetrics, command_visual_rect};
 use renderer_core::dirty::FrameDiff;
-use ui_core::{Component, ComponentList, OwnedBuild};
+use ui_core::{ComponentList, LayoutItem, OwnedBuild, WindowRoot};
 
 use crate::{
     Event, Key, LayoutStyle, ModifiersState, NamedKey, NodeId, PointerButton, PointerSource,
@@ -44,14 +44,14 @@ pub fn damage(new: &[DrawCommand], old: &[DrawCommand]) -> Option<Vec<Rect>> {
     }
 }
 
-/// Builds a root with `build` and mounts it, laid out against a `width`×`height` window on a surface that size, which is what the runner's first `WindowResized` does — a percent-sized tree resolves to nothing until something hands it a definite space. The tree is [`scoped`] as the runner's is: dropping it stops everything its build started and frees its layout nodes, so a test drops one tree before it resets the layout runtime for the next.
-pub fn mount<C: Component + 'static>(
-    build: impl FnOnce() -> C,
+/// Builds content with `build` and mounts it as the runner mounts what [`App::root`](crate::App::root) returns, laid out against a `width`×`height` window on a surface that size. The tree is [`scoped`] as the runner's is: dropping it stops everything its build started and frees its layout nodes, so a test drops one tree before it resets the layout runtime for the next.
+pub fn mount<L: LayoutItem + 'static>(
+    build: impl FnOnce() -> L,
     width: u32,
     height: u32,
 ) -> Scoped<ComponentList> {
     ui_core::set_surface_size(geometry_core::Size::new(width as f32, height as f32));
-    let mut tree = scoped(|| ComponentList::new(build()));
+    let mut tree = scoped(|| ComponentList::new(WindowRoot::new(Box::new(build()))));
     crate::batch(|| tree.on_event(&platform_core::Event::WindowResized { width, height }));
     tree
 }

@@ -554,7 +554,7 @@ struct TwoGuests {
 }
 
 impl telar::App for TwoGuests {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         telar::reset_layout_runtime();
         let guests = ["left", "right"]
             .into_iter()
@@ -573,11 +573,11 @@ impl telar::App for TwoGuests {
             &[],
         )
         .expect("the host's box builds");
-        Box::new(telar::WindowRoot::new(Box::new(Guests {
+        Box::new(Guests {
             node,
             guests,
             told: self.told.clone(),
-        })))
+        })
     }
 }
 
@@ -633,7 +633,7 @@ struct Elsewhere {
 }
 
 impl telar::App for Elsewhere {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         telar::reset_layout_runtime();
         let told = self.told.clone();
         let pane = telar::StyledContainer::new(
@@ -654,7 +654,7 @@ impl telar::App for Elsewhere {
                 ))
             },
         );
-        Box::new(telar::WindowRoot::new(Box::new(pane)))
+        Box::new(pane)
     }
 }
 

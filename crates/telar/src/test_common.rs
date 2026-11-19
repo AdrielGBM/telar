@@ -4,11 +4,10 @@
 #![allow(dead_code)]
 
 use telar::{
-    App, Color, Component, LayoutStyle, RectStyle, Rectangle, SizeDimension, WindowRoot,
-    reset_layout_runtime,
+    App, Color, LayoutItem, LayoutStyle, RectStyle, Rectangle, SizeDimension, reset_layout_runtime,
 };
 
-fn fill_root(color: Color) -> Box<dyn Component> {
+fn fill_root(color: Color) -> Box<dyn LayoutItem> {
     let rect = Rectangle::new(
         LayoutStyle::new()
             .width(SizeDimension::Percent(1.0))
@@ -16,7 +15,7 @@ fn fill_root(color: Color) -> Box<dyn Component> {
         move || RectStyle::filled(color, 0.0),
     )
     .unwrap();
-    Box::new(WindowRoot::new(Box::new(rect)))
+    Box::new(rect)
 }
 
 /// A real rsx app whose window is entirely one solid color.
@@ -25,7 +24,7 @@ pub struct FillApp {
 }
 
 impl App for FillApp {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         reset_layout_runtime();
         fill_root(self.color)
     }
@@ -42,7 +41,7 @@ pub struct MaybePanicApp {
 }
 
 impl App for MaybePanicApp {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         assert!(
             !self.panic_on_build,
             "MaybePanicApp: intentional build panic"

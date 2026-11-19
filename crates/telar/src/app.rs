@@ -2,14 +2,14 @@
 
 use platform_core::{AppCtx, SystemPreferences, WindowConfig};
 use renderer_core::Color;
-use ui_core::Component;
+use ui_core::LayoutItem;
 
 /// What an application answers for: the tree it builds, the window it wants, and what it does each frame.
 ///
 /// Four methods, one of them required. What the *runner* needs on top of this — mounting the tree, ticking motion, draining tasks, dispatching overlays — is [`AppRuntime`](crate::AppRuntime), because the answers differ for a tree behind a dylib and an application has no business restating them.
 pub trait App: 'static {
-    /// The root component of this application's UI.
-    fn root(&self) -> Box<dyn Component>;
+    /// The content of this application's window. The runner lays it out against the window on every target, as a layout root: an auto width or height fills the window on that axis and a percent size is a fraction of it, so a box sized `Percent(1.0)` is the whole window.
+    fn root(&self) -> Box<dyn LayoutItem>;
 
     /// What the surface is cleared to before the tree is drawn. `None` keeps the theme's own.
     fn clear_color(&self) -> Option<Color> {
@@ -32,7 +32,7 @@ pub trait App: 'static {
 
 /// Lets a caller hold applications of different types as one — [`crate::run_multi_with_platform`] driving a surface per monitor, each with its own root.
 impl<A: App + ?Sized> App for Box<A> {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         (**self).root()
     }
     fn clear_color(&self) -> Option<Color> {

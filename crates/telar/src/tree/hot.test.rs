@@ -1,4 +1,4 @@
-use ui_core::Component;
+use ui_core::LayoutItem;
 
 use super::*;
 use crate::tree::tests::panel_with_a_button;
@@ -6,7 +6,7 @@ use crate::tree::tests::panel_with_a_button;
 struct Blank;
 
 impl crate::app::App for Blank {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         ui_core::reset_layout_runtime();
         Box::new(
             ui_core::Rectangle::new(
@@ -63,7 +63,7 @@ fn the_hot_tree_feeds_the_registries_its_own_widgets_read() {
 fn releasing_a_hot_tree_frees_the_controls_it_built() {
     struct Panel(std::rc::Rc<std::cell::Cell<Option<ui_core::focus::FocusId>>>);
     impl crate::app::App for Panel {
-        fn root(&self) -> Box<dyn Component> {
+        fn root(&self) -> Box<dyn LayoutItem> {
             ui_core::reset_layout_runtime();
             panel_with_a_button(self.0.clone())
         }

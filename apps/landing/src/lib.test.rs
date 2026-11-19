@@ -147,7 +147,8 @@ fn drawn_content_stays_within_page_height() {
     use telar::{App, AvailableSpace, Event, LayoutItem, compute_layout, track_layout};
     let bottom = {
         telar::set_theme(crate::theme::LandingTheme::light());
-        let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
+        let mut tree =
+            telar::ComponentList::new(telar::WindowRoot::new(crate::app::LandingRoot.root()));
         tree.on_event(&Event::WindowResized {
             width: 1000,
             height: 800,
@@ -198,7 +199,8 @@ fn no_content_hidden_behind_a_later_band() {
     use telar::{App, DrawCommand::*, Event};
     for w in [560u32, 720, 900, 1100, 1280, 1440, 1920] {
         telar::set_theme(crate::theme::LandingTheme::light());
-        let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
+        let mut tree =
+            telar::ComponentList::new(telar::WindowRoot::new(crate::app::LandingRoot.root()));
         tree.on_event(&Event::WindowResized {
             width: w,
             height: 900,
@@ -239,7 +241,8 @@ fn section_bands_do_not_overlap() {
     use telar::{App, Event};
     for w in [820u32, 900, 1000, 1100, 1180] {
         telar::set_theme(crate::theme::LandingTheme::light());
-        let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
+        let mut tree =
+            telar::ComponentList::new(telar::WindowRoot::new(crate::app::LandingRoot.root()));
         tree.on_event(&Event::WindowResized {
             width: w,
             height: 800,
@@ -264,7 +267,8 @@ fn section_bands_do_not_overlap() {
 fn drawn_content_follows_width() {
     use telar::{App, Event};
     telar::set_theme(crate::theme::LandingTheme::light());
-    let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
+    let mut tree =
+        telar::ComponentList::new(telar::WindowRoot::new(crate::app::LandingRoot.root()));
 
     tree.on_event(&Event::WindowResized {
         width: 1400,
@@ -288,7 +292,8 @@ fn drawn_content_follows_width() {
 fn live_tree_relayouts_on_every_resize() {
     use telar::{App, Event};
     telar::set_theme(crate::theme::LandingTheme::light());
-    let mut tree = telar::ComponentList::new(crate::app::LandingRoot.root());
+    let mut tree =
+        telar::ComponentList::new(telar::WindowRoot::new(crate::app::LandingRoot.root()));
 
     let mut last_gen = None;
     for (w, h) in [(1400, 900), (600, 900), (1000, 700), (500, 1000)] {

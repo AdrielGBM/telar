@@ -59,7 +59,7 @@ impl DevOverlay for Ruler {
 struct Blank;
 
 impl telar::App for Blank {
-    fn root(&self) -> Box<dyn telar::Component> {
+    fn root(&self) -> Box<dyn telar::LayoutItem> {
         unreachable!("this test never runs the app, it only type-checks the door")
     }
 }

@@ -80,8 +80,9 @@ fn a_nav_click_keeps_the_loop_scheduling_frames_until_the_fade_settles() {
 
     // The press only arms the button; `on_press` fires on release, which is where the navigation (and its fade) starts.
     let (x, y) = {
-        let mut tree =
-            telar::ComponentList::new(telar::App::root(&sandbox::core::app::SandboxRoot));
+        let mut tree = telar::ComponentList::new(telar::WindowRoot::new(telar::App::root(
+            &sandbox::core::app::SandboxRoot,
+        )));
         tree.on_event(&Event::WindowResized {
             width: w,
             height: h,

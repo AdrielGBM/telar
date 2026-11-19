@@ -10,7 +10,7 @@ use common::FillApp;
 use platform_headless::{HeadlessPlatform, TitleSink};
 use telar::i18n::{Catalog, Entry, Message};
 use telar::{
-    App, AppConfig, AppCtx, AppPathsProvider, Color, Component, Location, LocationFormat, NoPaths,
+    App, AppConfig, AppCtx, AppPathsProvider, Color, LayoutItem, Location, LocationFormat, NoPaths,
     WindowConfig, effect, location_history, run_with_platform, set_catalog, set_locale,
     set_page_title,
 };
@@ -48,7 +48,7 @@ struct Titled {
 }
 
 impl App for Titled {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         let page = location_history().last().cloned().unwrap_or_default();
         let key = match page.segments() {
             [credits] if credits == "credits" => "credits.title",

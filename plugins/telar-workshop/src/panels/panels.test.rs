@@ -683,7 +683,7 @@ fn inspected(id: &str) -> (crate::state::WorkshopState, Scoped<ComponentList>) {
         || {
             let chrome =
                 telar_devtools::workbench_scope(|| crate::shell::shell(&state, None)).unwrap();
-            telar::WindowRoot::wrapping(box_item(chrome)).unwrap()
+            box_item(chrome)
         },
         WIDTH,
         HEIGHT,

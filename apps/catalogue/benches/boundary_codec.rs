@@ -53,7 +53,7 @@ fn bench_workshop(c: &mut Criterion) {
     ]
     .concat();
     let app = telar_workshop::WorkshopApp::new(previews);
-    let mut tree = ComponentList::new(app.root());
+    let mut tree = ComponentList::new(telar::WindowRoot::new(app.root()));
     tree.on_event(&Event::WindowResized {
         width: WINDOW_W,
         height: WINDOW_H,

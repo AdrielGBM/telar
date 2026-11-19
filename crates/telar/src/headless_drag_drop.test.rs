@@ -7,10 +7,10 @@ use std::sync::{Arc, Mutex};
 
 use platform_headless::{HeadlessPlatform, HeadlessSeat, PointerStep};
 use telar::{
-    App, AppConfig, AppPathsProvider, Component, DragActions, DragData, DragOutcome, DropAction,
-    DropTarget, LayoutStyle, MimeType, NoPaths, OutgoingDrag, RectStyle, SizeDimension,
-    StyledContainer, SurfaceId, WindowConfig, WindowRoot, reset_layout_runtime,
-    run_multi_with_platform, run_with_platform,
+    App, AppConfig, AppPathsProvider, DragActions, DragData, DragOutcome, DropAction, DropTarget,
+    LayoutItem, LayoutStyle, MimeType, NoPaths, OutgoingDrag, RectStyle, SizeDimension,
+    StyledContainer, SurfaceId, WindowConfig, reset_layout_runtime, run_multi_with_platform,
+    run_with_platform,
 };
 
 const SOURCE: SurfaceId = SurfaceId(1);
@@ -40,7 +40,7 @@ fn whole_window() -> LayoutStyle {
 }
 
 impl App for DragApp {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         reset_layout_runtime();
         let pane = StyledContainer::new(whole_window(), |_r| RectStyle::default(), vec![]).unwrap();
         let log = self.log.clone();
@@ -79,7 +79,7 @@ impl App for DragApp {
                 )
             }
         };
-        Box::new(WindowRoot::new(Box::new(pane)))
+        Box::new(pane)
     }
 }
 

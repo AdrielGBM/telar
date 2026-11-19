@@ -10,7 +10,7 @@ use std::sync::Arc;
 use common::FillApp;
 use platform_headless::HeadlessPlatform;
 use telar::{
-    App, AppConfig, AppPathsProvider, Color, ColorScheme, Component, NoPaths, SystemPreferences,
+    App, AppConfig, AppPathsProvider, Color, ColorScheme, LayoutItem, NoPaths, SystemPreferences,
     run_with_platform, system_preferences,
 };
 
@@ -23,7 +23,7 @@ struct Recorder {
 }
 
 impl App for Recorder {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         *self.seen_at_build.borrow_mut() = Some(system_preferences());
         *self.reduced_motion_at_build.borrow_mut() = Some(telar::use_reduced_motion());
         self.fill.root()

@@ -3,7 +3,7 @@ use super::*;
 /// A button inside a box, its focus id handed out as the tree is built.
 pub(super) fn panel_with_a_button(
     id: std::rc::Rc<std::cell::Cell<Option<ui_core::focus::FocusId>>>,
-) -> Box<dyn Component> {
+) -> Box<dyn ui_core::LayoutItem> {
     let button = ui_core::StyledContainer::new(
         layout_core::LayoutStyle::new().width(40.0).height(20.0),
         |_| renderer_core::RectStyle::default(),
@@ -69,9 +69,7 @@ fn resize(tree: &mut dyn UiTree) {
 fn a_remounted_tree_portals_onto_its_own_root_and_leaves_no_node_of_the_last_one() {
     ui_core::reset_layout_runtime();
     let baseline = ui_core::live_node_count();
-    let mut first = LocalTree::new(|| {
-        Box::new(ui_core::WindowRoot::wrapping(swatch()).expect("a root builds"))
-    });
+    let mut first = LocalTree::new(swatch);
     resize(&mut first);
     drop(first);
     assert_eq!(
@@ -89,7 +87,7 @@ fn a_remounted_tree_portals_onto_its_own_root_and_leaves_no_node_of_the_last_one
             content.set(Some(overlay.content_node()));
             let page =
                 ui_core::Container::new(fill(), vec![Box::new(overlay)]).expect("a page builds");
-            Box::new(ui_core::WindowRoot::wrapping(Box::new(page)).expect("a root builds"))
+            Box::new(page)
         }
     });
     resize(&mut second);
@@ -105,5 +103,41 @@ fn a_remounted_tree_portals_onto_its_own_root_and_leaves_no_node_of_the_last_one
         ui_core::live_node_count(),
         baseline,
         "and so did the second"
+    );
+}
+
+/// What an application returns is laid out against the window whatever it is. A box sized in percent of the window, returned as it is, used to stay 0×0 and leave the window showing nothing but its clear colour, on every target.
+#[test]
+fn an_application_root_sized_in_percent_fills_the_window() {
+    struct Filled;
+    impl crate::App for Filled {
+        fn root(&self) -> Box<dyn ui_core::LayoutItem> {
+            Box::new(
+                ui_core::StyledContainer::new(
+                    fill(),
+                    |_| renderer_core::RectStyle::filled(renderer_core::Color::BLACK, 0.0),
+                    vec![],
+                )
+                .expect("a box builds"),
+            )
+        }
+    }
+
+    ui_core::reset_layout_runtime();
+    let mut tree = crate::AppRuntime::mount(&mut crate::LocalApp(Filled));
+    resize(tree.as_mut());
+
+    let drawn: Vec<geometry_core::Rect> = tree
+        .frame()
+        .iter()
+        .filter_map(|command| match command {
+            renderer_core::DrawCommand::Rect { rect, .. } => Some(*rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        drawn,
+        [geometry_core::Rect::new(0.0, 0.0, 400.0, 300.0)],
+        "the box is the whole window"
     );
 }

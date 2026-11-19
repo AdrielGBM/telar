@@ -56,7 +56,7 @@ const HEIGHT: u32 = 480;
 struct Shaped;
 
 impl crate::app::App for Shaped {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
         ui_core::reset_layout_runtime();
         let visits = crate::hot_signal("hydration::visits", 3u32);
         let entrance = motion_core::Animated::new(
@@ -84,7 +84,7 @@ impl crate::app::App for Shaped {
         let main = ui_core::Container::new(layout_core::LayoutStyle::new().flex_column(), children)
             .unwrap()
             .role(renderer_core::Role::Main);
-        Box::new(ui_core::WindowRoot::new(Box::new(main)))
+        Box::new(main)
     }
 
     fn clear_color(&self) -> Option<renderer_core::Color> {

@@ -2,8 +2,8 @@
 
 use telar::{
     App, AppCtx, Chord, Component, Event, EventResult, FontAsset, Input, LayoutItem, LayoutStyle,
-    PointerButton, RectStyle, RenderNode, RwSignal, StyledContainer, Text, TextStyle, WindowConfig,
-    box_item, signal, spawn_task, use_theme_tokens,
+    NodeId, PointerButton, RectStyle, RenderNode, RwSignal, StyledContainer, Text, TextStyle,
+    WindowConfig, box_item, signal, spawn_task, use_theme_tokens,
 };
 use telar_components::{ButtonProps, button};
 use telar_icons::{IconProps, icon};
@@ -57,6 +57,12 @@ impl PanicsOnPress {
             content: box_item(panel),
             moves,
         }
+    }
+}
+
+impl LayoutItem for PanicsOnPress {
+    fn layout_node(&self) -> NodeId {
+        self.content.layout_node()
     }
 }
 
@@ -120,7 +126,7 @@ fn stop_a_worker_that_will_not() {
 struct Fixture;
 
 impl App for Fixture {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         Box::new(PanicsOnPress::new())
     }
 

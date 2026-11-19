@@ -180,7 +180,7 @@ fn every_button_is_named(nodes: &[telar::AccessNode]) -> bool {
 #[test]
 fn a_phone_reads_the_drawer_only_while_it_is_open() {
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
-    let mut tree = telar::ComponentList::new(SandboxRoot.root());
+    let mut tree = telar::ComponentList::new(telar::WindowRoot::new(SandboxRoot.root()));
     tree.on_event(&Event::WindowResized {
         width: 393,
         height: 800,
@@ -203,7 +203,7 @@ fn a_phone_reads_the_drawer_only_while_it_is_open() {
 #[test]
 fn a_section_a_reader_activates_in_the_drawer_shows_and_shuts_the_drawer() {
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
-    let mut tree = telar::ComponentList::new(SandboxRoot.root());
+    let mut tree = telar::ComponentList::new(telar::WindowRoot::new(SandboxRoot.root()));
     tree.on_event(&Event::WindowResized {
         width: 393,
         height: 800,
@@ -253,7 +253,7 @@ fn a_phone_keeps_the_shell_clear_of_the_system_bars() {
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
     let bars = Insets::new(40.0, 0.0, 24.0, 0.0);
     telar::set_safe_area_insets(Insets::default());
-    let mut tree = telar::ComponentList::new(SandboxRoot.root());
+    let mut tree = telar::ComponentList::new(telar::WindowRoot::new(SandboxRoot.root()));
     tree.on_event(&Event::WindowResized {
         width: 393,
         height: 800,

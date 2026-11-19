@@ -1192,7 +1192,7 @@ fn a_modal_layer_that_is_up_keeps_a_reader_inside_it() {
     )
     .unwrap();
     crate::set_surface_size(geometry_core::Size::new(400.0, 300.0));
-    let mut tree = ui_tree::ComponentList::new(WindowRoot::wrapping(Box::new(page)).unwrap());
+    let mut tree = ui_tree::ComponentList::new(WindowRoot::new(Box::new(page)));
     tree.on_event(&Event::WindowResized {
         width: 400,
         height: 300,
@@ -1263,7 +1263,7 @@ fn a_live_region_behind_a_modal_layer_is_still_read() {
         )
         .unwrap();
         crate::set_surface_size(geometry_core::Size::new(400.0, 300.0));
-        let mut tree = ui_tree::ComponentList::new(WindowRoot::wrapping(Box::new(page)).unwrap());
+        let mut tree = ui_tree::ComponentList::new(WindowRoot::new(Box::new(page)));
         tree.on_event(&Event::WindowResized {
             width: 400,
             height: 300,
@@ -1835,7 +1835,7 @@ fn a_menu_in_a_modal_layer_holds_its_items() {
     )
     .unwrap();
     crate::set_surface_size(geometry_core::Size::new(400.0, 300.0));
-    let mut tree = ui_tree::ComponentList::new(WindowRoot::wrapping(Box::new(page)).unwrap());
+    let mut tree = ui_tree::ComponentList::new(WindowRoot::new(Box::new(page)));
     tree.on_event(&Event::WindowResized {
         width: 400,
         height: 300,

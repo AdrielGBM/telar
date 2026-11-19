@@ -3,7 +3,8 @@ use telar::{App, AvailableSpace, Event, compute_layout};
 #[test]
 fn app_root_builds_and_lays_out() {
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
-    let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
+    let mut tree =
+        telar::ComponentList::new(telar::WindowRoot::new(crate::core::app::SandboxRoot.root()));
     tree.on_event(&Event::WindowResized {
         width: 1200,
         height: 900,
@@ -23,7 +24,8 @@ fn an_rtl_locale_mirrors_the_shell() {
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
     telar::follow_locale_direction();
     telar::set_locale(telar::locale_tag!("en"));
-    let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
+    let mut tree =
+        telar::ComponentList::new(telar::WindowRoot::new(crate::core::app::SandboxRoot.root()));
     let resize = Event::WindowResized {
         width: 1200,
         height: 900,
@@ -69,7 +71,8 @@ fn nav_rail_center_x(tree: &telar::ComponentList) -> f32 {
 #[test]
 fn shell_survives_breakpoint_transition() {
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
-    let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
+    let mut tree =
+        telar::ComponentList::new(telar::WindowRoot::new(crate::core::app::SandboxRoot.root()));
     for (width, height) in [(1200u32, 900u32), (380, 720), (1000, 800), (360, 640)] {
         tree.on_event(&Event::WindowResized { width, height });
         let _ = tree.commands();
@@ -80,7 +83,8 @@ fn shell_survives_breakpoint_transition() {
 fn nav_click_switches_section() {
     use platform_core::{PointerButton, PointerSource};
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
-    let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
+    let mut tree =
+        telar::ComponentList::new(telar::WindowRoot::new(crate::core::app::SandboxRoot.root()));
     tree.on_event(&Event::WindowResized {
         width: 1200,
         height: 900,
@@ -192,7 +196,8 @@ fn nav_tracks_theme_after_navigation() {
         crate::core::theme::register_modes();
         // Tall enough that every nav button stays well inside the viewport. At 900 the deepest target sat 13px above the bottom edge, so a platform whose font metrics pushed the rail down dropped the click outside the window and left the previous section selected.
         const WINDOW_H: u32 = 1200;
-        let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
+        let mut tree =
+            telar::ComponentList::new(telar::WindowRoot::new(crate::core::app::SandboxRoot.root()));
         feed(
             &mut tree,
             &Event::WindowResized {
@@ -292,7 +297,8 @@ fn nav_highlight_follows_selection() {
         ys
     }
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
-    let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
+    let mut tree =
+        telar::ComponentList::new(telar::WindowRoot::new(crate::core::app::SandboxRoot.root()));
     tree.on_event(&Event::WindowResized {
         width: 1200,
         height: 900,
@@ -341,7 +347,8 @@ fn nav_highlight_follows_selection() {
 #[test]
 fn hidden_canvas_sections_do_not_bleed() {
     telar::set_theme(crate::core::theme::SandboxTheme::modern());
-    let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
+    let mut tree =
+        telar::ComponentList::new(telar::WindowRoot::new(crate::core::app::SandboxRoot.root()));
     tree.on_event(&Event::WindowResized {
         width: 1200,
         height: 900,

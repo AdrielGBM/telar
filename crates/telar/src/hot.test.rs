@@ -13,16 +13,11 @@ thread_local! {
 struct Blank;
 
 impl crate::app::App for Blank {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
-        Box::new(BlankView)
-    }
-}
-
-struct BlankView;
-
-impl ui_tree::Component for BlankView {
-    fn view(&self) -> ui_tree::RenderNode {
-        ui_tree::RenderNode::group([])
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
+        Box::new(
+            ui_core::Container::new(layout_core::LayoutStyle::new(), Vec::new())
+                .expect("an empty box builds"),
+        )
     }
 }
 

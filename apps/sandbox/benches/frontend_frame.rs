@@ -70,7 +70,9 @@ fn use_cell_metrics(cell: CellSize) {
 /// The real sandbox tree, laid out at `width`×`height` logical pixels, flattened to the command stream a backend receives. Whichever measurer the surface has open when this runs is the one the layout is sized by.
 fn tree_at(width: u32, height: u32) -> telar::ComponentList {
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
-    let mut tree = telar::ComponentList::new(sandbox::core::app::SandboxRoot.root());
+    let mut tree = telar::ComponentList::new(telar::WindowRoot::new(
+        sandbox::core::app::SandboxRoot.root(),
+    ));
     tree.on_event(&Event::WindowResized { width, height });
     tree
 }

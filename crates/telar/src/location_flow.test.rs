@@ -10,7 +10,7 @@ use std::sync::Arc;
 use common::FillApp;
 use platform_headless::HeadlessPlatform;
 use telar::{
-    App, AppConfig, AppCtx, AppPathsProvider, Color, Component, HistorySink, Location,
+    App, AppConfig, AppCtx, AppPathsProvider, Color, HistorySink, LayoutItem, Location,
     LocationFormat, NoPaths, location_history, push_location, run_with_platform,
 };
 
@@ -26,7 +26,7 @@ struct Walker {
 }
 
 impl App for Walker {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         *self.seen_at_build.borrow_mut() = location_history();
         self.fill.root()
     }

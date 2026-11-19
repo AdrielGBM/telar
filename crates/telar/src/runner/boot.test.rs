@@ -19,7 +19,7 @@ const APP: &str = "boot-probe";
 struct Probe;
 
 impl App for Probe {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
         Box::new(
             ui_core::Rectangle::new(
                 layout_core::LayoutStyle::new().width(4.0).height(4.0),

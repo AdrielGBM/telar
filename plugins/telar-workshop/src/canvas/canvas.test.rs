@@ -7,7 +7,7 @@ use telar::testing::{Scoped, centre, damage, find_text, mount, moved, press, rel
 use telar::{
     Color, ComponentList, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, Rect,
     RectStyle, Role, ShapeStyle, Size, SizeDimension, StyledContainer, Text, TextStyle, Uri,
-    UriOpener, WindowRoot, box_item, dismiss_depth, for_each_with_matrix, relayout_if_dirty,
+    UriOpener, box_item, dismiss_depth, for_each_with_matrix, relayout_if_dirty,
     reset_layout_runtime, set_uri_opener, signal, transform_clip_rect,
 };
 use telar_components::{ModalProps, modal};
@@ -45,11 +45,7 @@ fn mounted(entries: Vec<PreviewEntry>) -> (WorkshopState, Scoped<ComponentList>)
     telar::testing::install_test_face();
     reset_layout_runtime();
     let state = WorkshopState::new(entries.into(), &Default::default());
-    let tree = mount(
-        || WindowRoot::wrapping(canvas(&state).unwrap()).unwrap(),
-        WIDTH,
-        HEIGHT,
-    );
+    let tree = mount(|| canvas(&state).unwrap(), WIDTH, HEIGHT);
     relayout_if_dirty();
     (state, tree)
 }
@@ -61,7 +57,7 @@ fn workshop(entries: Vec<PreviewEntry>) -> (WorkshopState, Scoped<ComponentList>
     let tree = mount(
         || {
             let chrome = workbench_scope(|| crate::shell::shell(&state, None)).unwrap();
-            WindowRoot::wrapping(box_item(chrome)).unwrap()
+            box_item(chrome)
         },
         WIDTH,
         HEIGHT,

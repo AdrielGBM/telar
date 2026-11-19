@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use platform_headless::HeadlessPlatform;
 use telar::{
-    App, AppConfig, AppPathsProvider, Color, Component, Container, LayoutItem, LayoutStyle,
-    NoPaths, RectStyle, Rectangle, Size, SizeDimension, WindowRoot, breakpoint, effect,
-    reset_layout_runtime, run_with_platform, surface_size, track_layout,
+    App, AppConfig, AppPathsProvider, Color, Container, LayoutItem, LayoutStyle, NoPaths,
+    RectStyle, Rectangle, Size, SizeDimension, breakpoint, effect, reset_layout_runtime,
+    run_with_platform, surface_size, track_layout,
 };
 
 #[derive(Default)]
@@ -21,7 +21,7 @@ struct Observed {
 struct Responsive(Rc<Observed>);
 
 impl App for Responsive {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         reset_layout_runtime();
         *self.0.size_at_build.borrow_mut() = Some(surface_size());
 
@@ -54,7 +54,7 @@ impl App for Responsive {
             vec![Box::new(half)],
         )
         .unwrap();
-        Box::new(WindowRoot::new(Box::new(page)))
+        Box::new(page)
     }
 }
 

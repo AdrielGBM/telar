@@ -120,6 +120,12 @@ impl ScrollPage {
     }
 }
 
+impl LayoutItem for ScrollPage {
+    fn layout_node(&self) -> NodeId {
+        self.root
+    }
+}
+
 impl Component for ScrollPage {
     fn view(&self) -> RenderNode {
         self.scroll_area.view()

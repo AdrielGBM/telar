@@ -7,9 +7,8 @@ use std::rc::Rc;
 use telar::preview::PreviewEntry;
 use telar::preview::host::{PreviewRequest, duplicate_ids, requested_preview, test_report_path};
 use telar::{
-    App, Color, Component, LayoutError, LayoutItem, LayoutStyle, ReactiveList, RectStyle,
-    ShapeStyle, SizeDimension, StyledContainer, WindowRoot, box_item, reset_layout_runtime,
-    use_resolved_scheme,
+    App, Color, LayoutError, LayoutItem, LayoutStyle, ReactiveList, RectStyle, ShapeStyle,
+    SizeDimension, StyledContainer, box_item, reset_layout_runtime, use_resolved_scheme,
 };
 use telar_devtools::{WorkbenchTheme, use_workbench_tokens, workbench_scope};
 
@@ -70,7 +69,7 @@ impl WorkshopApp {
 }
 
 impl App for WorkshopApp {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         reset_layout_runtime();
         let keeper = store::install();
         self.keeper.replace(keeper.clone()).flush();
@@ -85,9 +84,7 @@ impl App for WorkshopApp {
         let project_name = self.project_name.clone();
         let chrome = workbench_scope(|| workshop(&state, project_name))
             .expect("the workshop's chrome failed to build");
-        Box::new(
-            WindowRoot::wrapping(Box::new(chrome)).expect("the workshop's window failed to build"),
-        )
+        Box::new(chrome)
     }
 
     fn clear_color(&self) -> Option<Color> {

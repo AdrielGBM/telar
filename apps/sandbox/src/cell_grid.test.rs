@@ -35,7 +35,9 @@ fn every_box_keeps_its_height_at_every_scroll_offset() {
     });
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
 
-    let mut tree = telar::ComponentList::new(sandbox::core::app::SandboxRoot.root());
+    let mut tree = telar::ComponentList::new(telar::WindowRoot::new(
+        sandbox::core::app::SandboxRoot.root(),
+    ));
     tree.on_event(&Event::WindowResized {
         width: SURFACE.0,
         height: SURFACE.1,
@@ -70,7 +72,9 @@ fn layout_is_told_only_whole_cells() {
     });
     telar::set_theme(sandbox::core::theme::SandboxTheme::modern());
 
-    let mut tree = telar::ComponentList::new(sandbox::core::app::SandboxRoot.root());
+    let mut tree = telar::ComponentList::new(telar::WindowRoot::new(
+        sandbox::core::app::SandboxRoot.root(),
+    ));
     tree.on_event(&Event::WindowResized {
         width: SURFACE.0,
         height: SURFACE.1,

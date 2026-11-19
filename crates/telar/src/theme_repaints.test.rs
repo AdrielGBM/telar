@@ -3,9 +3,9 @@
 //! The claim the whole theme design rests on: a widget reads a token inside its own `view`, so switching the theme re-runs exactly the segments that read it. Checked on both shapes of backend, because only one of them was ever exercised — a document wraps every box in an element, and an element subscribes to more than a rasterised box does.
 
 use telar::{
-    Color, ColorScheme, Component, DrawCommand, EventResult, LayoutItem, LayoutStyle, LocalTree,
-    RectStyle, Rectangle, RenderNode, ShapeStyle, SystemPreferences, ThemeTokens, UiTree, box_item,
-    reset_layout_runtime, use_theme_tokens,
+    Color, ColorScheme, DrawCommand, LayoutItem, LayoutStyle, LocalTree, RectStyle, Rectangle,
+    ShapeStyle, SystemPreferences, ThemeTokens, UiTree, box_item, reset_layout_runtime,
+    use_theme_tokens,
 };
 
 fn dark(dark: bool) -> SystemPreferences {
@@ -21,19 +21,6 @@ fn dark(dark: bool) -> SystemPreferences {
 
 fn set_system_dark(is_dark: bool) {
     telar::set_system_preferences(dark(is_dark));
-}
-
-struct Root(Box<dyn LayoutItem>);
-impl Component for Root {
-    fn view(&self) -> RenderNode {
-        self.0.view()
-    }
-    fn on_event(&mut self, _: &platform_core::Event) -> EventResult {
-        EventResult::Ignored
-    }
-    fn debug_name(&self) -> &'static str {
-        "ThemeRoot"
-    }
 }
 
 #[derive(Clone)]
@@ -68,7 +55,7 @@ fn a_themed_box() -> LocalTree {
         RectStyle::default().with_fill(use_theme_tokens().surface_alt())
     })
     .unwrap();
-    LocalTree::new(|| Box::new(Root(box_item(boxed))))
+    LocalTree::new(|| box_item(boxed))
 }
 
 fn following_the_system() {
@@ -162,13 +149,13 @@ fn an_application_hosting_other_trees_is_told_the_preferences_changed() {
 
     struct Host(Rc<Cell<Option<ColorScheme>>>);
     impl App for Host {
-        fn root(&self) -> Box<dyn Component> {
-            Box::new(Root(box_item(
+        fn root(&self) -> Box<dyn LayoutItem> {
+            box_item(
                 Rectangle::new(LayoutStyle::new().width(1.0).height(1.0), || {
                     RectStyle::default().with_fill(use_theme_tokens().surface_alt())
                 })
                 .unwrap(),
-            )))
+            )
         }
         fn on_system_preferences(&self, preferences: &SystemPreferences) {
             self.0.set(preferences.color_scheme);
@@ -273,7 +260,7 @@ fn sibling_subtrees_in_one_window_keep_their_own_themes() {
         vec![Box::new(bar), Box::new(card)],
     )
     .unwrap();
-    let mut tree = LocalTree::new(|| Box::new(telar::WindowRoot::new(box_item(window))));
+    let mut tree = LocalTree::new(|| box_item(window));
     tree.on_event(&platform_core::Event::WindowResized {
         width: 200,
         height: 100,

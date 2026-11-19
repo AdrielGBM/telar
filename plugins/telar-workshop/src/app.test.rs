@@ -98,11 +98,7 @@ fn the_canvas_builds_with_the_args_the_state_holds() {
     telar::testing::install_test_face();
     reset_layout_runtime();
     let state = WorkshopState::new(entries().into(), &PreviewRequest::default());
-    let tree = mount(
-        || WindowRoot::wrapping(crate::canvas::canvas(&state).unwrap()).unwrap(),
-        WIDTH,
-        HEIGHT,
-    );
+    let tree = mount(|| crate::canvas::canvas(&state).unwrap(), WIDTH, HEIGHT);
     relayout_if_dirty();
     assert!(find_text(&tree, "primary body"));
     state

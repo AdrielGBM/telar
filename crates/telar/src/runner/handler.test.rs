@@ -12,7 +12,7 @@ use test_process::OwnProcess;
 struct Unchanging;
 
 impl App for Unchanging {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
         ui_core::reset_layout_runtime();
         Box::new(
             ui_core::Rectangle::new(
@@ -22,6 +22,13 @@ impl App for Unchanging {
             .expect("a rectangle builds"),
         )
     }
+}
+
+/// A layout node for a test component that draws nothing of its own.
+fn leaf() -> layout_core::NodeId {
+    ui_core::new_leaf(layout_core::LayoutStyle::new())
+        .expect("a leaf builds")
+        .0
 }
 
 fn handler() -> AppHandler<HeadlessWindow, ()> {
@@ -76,7 +83,7 @@ fn the_rasteriser_never_asks_for_an_idle_frame() {
 struct Tinted(reactive_core::RwSignal<f32>);
 
 impl App for Tinted {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
         ui_core::reset_layout_runtime();
         let tint = self.0;
         Box::new(
@@ -503,7 +510,7 @@ impl Stateful {
 }
 
 impl App for Stateful {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
         ui_core::reset_layout_runtime();
         self.roots.set(self.roots.get() + 1);
         let local = reactive_core::signal(self.local_start);
@@ -782,7 +789,7 @@ fn a_resumed_window_with_nothing_changed_still_draws() {
 struct Handles;
 
 impl App for Handles {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
         ui_core::reset_layout_runtime();
         let grip = ui_core::StyledContainer::new(
             layout_core::LayoutStyle::new().width(40.0).height(40.0),
@@ -802,7 +809,7 @@ impl App for Handles {
         )
         .expect("a card builds")
         .cursor(platform_core::Cursor::Grab);
-        Box::new(ui_core::WindowRoot::new(ui_core::box_item(card)))
+        ui_core::box_item(card)
     }
 }
 
@@ -940,7 +947,13 @@ thread_local! {
 }
 
 /// Notes which surface is active when it is dropped.
-struct SurfaceWitness;
+struct SurfaceWitness(layout_core::NodeId);
+
+impl ui_core::LayoutItem for SurfaceWitness {
+    fn layout_node(&self) -> layout_core::NodeId {
+        self.0
+    }
+}
 
 impl ui_tree::Component for SurfaceWitness {
     fn view(&self) -> ui_tree::RenderNode {
@@ -957,8 +970,8 @@ impl Drop for SurfaceWitness {
 struct Witnessed;
 
 impl App for Witnessed {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
-        Box::new(SurfaceWitness)
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
+        Box::new(SurfaceWitness(leaf()))
     }
 }
 
@@ -1134,7 +1147,7 @@ fn a_runtime_swapped_in_by_a_reload_is_handed_the_loop_wake() {
 struct Labelled;
 
 impl App for Labelled {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
         ui_core::reset_layout_runtime();
         Box::new(
             ui_core::Text::declaring(
@@ -1196,7 +1209,13 @@ fn a_surface_opens_in_its_configured_family_and_follows_a_new_one() {
 }
 
 /// A tree that counts the pointer presses that reach it.
-struct Heard(Rc<Cell<u32>>);
+struct Heard(Rc<Cell<u32>>, layout_core::NodeId);
+
+impl ui_core::LayoutItem for Heard {
+    fn layout_node(&self) -> layout_core::NodeId {
+        self.1
+    }
+}
 
 impl ui_tree::Component for Heard {
     fn view(&self) -> ui_tree::RenderNode {
@@ -1214,8 +1233,8 @@ impl ui_tree::Component for Heard {
 struct Listening(Rc<Cell<u32>>);
 
 impl App for Listening {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
-        Box::new(Heard(Rc::clone(&self.0)))
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
+        Box::new(Heard(Rc::clone(&self.0), leaf()))
     }
 }
 
@@ -1613,7 +1632,7 @@ thread_local! {
 struct TitleBar;
 
 impl App for TitleBar {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
         ui_core::reset_layout_runtime();
         crate::window::set_decorations(false);
         reactive_core::effect(|| {
@@ -1639,7 +1658,7 @@ impl App for TitleBar {
             vec![ui_core::box_item(band)],
         )
         .expect("a card builds");
-        Box::new(ui_core::WindowRoot::new(ui_core::box_item(card)))
+        ui_core::box_item(card)
     }
 }
 
@@ -1745,7 +1764,14 @@ thread_local! {
 
 /// A tree whose press handler panics, as one that writes a signal its own effect still borrows does.
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
-struct BorrowsTwice;
+struct BorrowsTwice(layout_core::NodeId);
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+impl ui_core::LayoutItem for BorrowsTwice {
+    fn layout_node(&self) -> layout_core::NodeId {
+        self.0
+    }
+}
 
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl ui_tree::Component for BorrowsTwice {
@@ -1767,14 +1793,21 @@ struct Panicking;
 
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl App for Panicking {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
-        Box::new(BorrowsTwice)
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
+        Box::new(BorrowsTwice(leaf()))
     }
 }
 
 /// A tree that hears presses and does nothing else with them.
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
-struct Counting;
+struct Counting(layout_core::NodeId);
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+impl ui_core::LayoutItem for Counting {
+    fn layout_node(&self) -> layout_core::NodeId {
+        self.0
+    }
+}
 
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl ui_tree::Component for Counting {
@@ -1795,8 +1828,8 @@ struct Fixed;
 
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl App for Fixed {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
-        Box::new(Counting)
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
+        Box::new(Counting(leaf()))
     }
 }
 
@@ -2077,7 +2110,7 @@ fn a_build_that_panics_as_it_starts_keeps_the_window_for_the_next() {
 struct OneField;
 
 impl App for OneField {
-    fn root(&self) -> Box<dyn ui_tree::Component> {
+    fn root(&self) -> Box<dyn ui_core::LayoutItem> {
         ui_core::reset_layout_runtime();
         let field = ui_core::Input::new(
             reactive_core::signal(String::from("ab")),
@@ -2086,7 +2119,7 @@ impl App for OneField {
         )
         .expect("a field builds")
         .autofocus();
-        Box::new(ui_core::WindowRoot::new(ui_core::box_item(field)))
+        ui_core::box_item(field)
     }
 }
 

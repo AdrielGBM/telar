@@ -12,10 +12,10 @@ use std::sync::Arc;
 use common::FillApp;
 use platform_headless::HeadlessPlatform;
 use telar::{
-    App, AppConfig, AppCtx, AppPathsProvider, Color, Component, Destination, HistorySink, Location,
-    LocationFormat, NoPaths, SystemPreferences, address_of, current_locale, follow_location_locale,
-    location_history, run_with_platform, set_locale, store_preference, stored_preference,
-    user_preferences::LOCALE_KEY,
+    App, AppConfig, AppCtx, AppPathsProvider, Color, Destination, HistorySink, LayoutItem,
+    Location, LocationFormat, NoPaths, SystemPreferences, address_of, current_locale,
+    follow_location_locale, location_history, run_with_platform, set_locale, store_preference,
+    stored_preference, user_preferences::LOCALE_KEY,
 };
 
 fn at(path: &str) -> Location {
@@ -40,7 +40,7 @@ struct Reader {
 }
 
 impl App for Reader {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         *self.seen.borrow_mut() = Seen {
             history: location_history(),
             locale: current_locale(),

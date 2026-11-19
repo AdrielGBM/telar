@@ -3,7 +3,7 @@
 use telar::testing::{damage, mount};
 use telar::{
     Color, Container, DrawCommand, LayoutItem, LayoutStyle, Rect, RectStyle, StyledContainer,
-    WindowRoot, box_item, reset_layout_runtime, signal,
+    box_item, reset_layout_runtime, signal,
 };
 
 fn tile(x: f32, fill: impl Fn() -> Color + 'static) -> Box<dyn LayoutItem> {
@@ -22,10 +22,8 @@ fn tile(x: f32, fill: impl Fn() -> Color + 'static) -> Box<dyn LayoutItem> {
     )
 }
 
-fn page(tiles: Vec<Box<dyn LayoutItem>>) -> WindowRoot {
-    WindowRoot::new(box_item(
-        Container::new(LayoutStyle::new().width(300.0).height(80.0), tiles).expect("a page"),
-    ))
+fn page(tiles: Vec<Box<dyn LayoutItem>>) -> Container {
+    Container::new(LayoutStyle::new().width(300.0).height(80.0), tiles).expect("a page")
 }
 
 fn frame(tree: &ui_core::ComponentList) -> Vec<DrawCommand> {

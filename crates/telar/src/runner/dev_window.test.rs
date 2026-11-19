@@ -6,7 +6,7 @@ use crate::runner::resolved_window;
 fn the_app_window_config_wins_over_the_dev_overrides() {
     struct Opinionated;
     impl App for Opinionated {
-        fn root(&self) -> Box<dyn ui_tree::Component> {
+        fn root(&self) -> Box<dyn ui_core::LayoutItem> {
             unreachable!("window resolution never builds the tree")
         }
         fn window_config(&self) -> Option<platform_core::WindowConfig> {
@@ -18,7 +18,7 @@ fn the_app_window_config_wins_over_the_dev_overrides() {
     }
     struct Indifferent;
     impl App for Indifferent {
-        fn root(&self) -> Box<dyn ui_tree::Component> {
+        fn root(&self) -> Box<dyn ui_core::LayoutItem> {
             unreachable!("window resolution never builds the tree")
         }
     }
@@ -41,7 +41,7 @@ fn the_app_window_config_wins_over_the_dev_overrides() {
 fn a_window_nobody_titled_is_named_after_the_package() {
     struct Silent;
     impl App for Silent {
-        fn root(&self) -> Box<dyn ui_tree::Component> {
+        fn root(&self) -> Box<dyn ui_core::LayoutItem> {
             unreachable!("window resolution never builds the tree")
         }
     }

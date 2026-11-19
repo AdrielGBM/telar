@@ -3,8 +3,8 @@ use std::time::Duration;
 use telar::focus;
 use telar::testing::{Scoped, centre, mount, moved, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Component, ComponentList, Event, LocalApp, Rect, ResizeEdge, Role,
-    Size, WindowCommand, WindowRoot, reset_layout_runtime, take_window_commands,
+    AccessNode, App, AppRuntime, ComponentList, Event, LocalApp, Rect, ResizeEdge, Role, Size,
+    WindowCommand, reset_layout_runtime, take_window_commands,
 };
 use telar_components::DOUBLE_CLICK;
 use telar_devtools::workbench_scope;
@@ -25,12 +25,12 @@ struct Framed {
 }
 
 impl App for Framed {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         let chrome = workbench_scope(|| {
             crate::shell::shell_in(&self.state, self.project.clone(), self.frame)
         })
         .expect("the chrome builds");
-        Box::new(WindowRoot::wrapping(Box::new(chrome)).expect("the window builds"))
+        Box::new(chrome)
     }
 }
 

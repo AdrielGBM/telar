@@ -635,7 +635,7 @@ fn a_modal_open_from_the_start_covers_the_window_above_the_tree() {
     )
     .unwrap();
     crate::set_surface_size(geometry_core::Size::new(400.0, 300.0));
-    let mut tree = ComponentList::new(WindowRoot::wrapping(Box::new(page)).unwrap());
+    let mut tree = ComponentList::new(WindowRoot::new(Box::new(page)));
     tree.on_event(&Event::WindowResized {
         width: 400,
         height: 300,

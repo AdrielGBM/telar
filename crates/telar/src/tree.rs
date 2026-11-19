@@ -9,7 +9,7 @@ use std::ops::Deref;
 
 use platform_core::Event;
 use renderer_core::DrawCommand;
-use ui_core::{Component, ComponentList, EventResult, OwnedBuild};
+use ui_core::{ComponentList, EventResult, LayoutItem, OwnedBuild, WindowRoot};
 use ui_tree::SegmentNodeInfo;
 
 #[cfg(all(
@@ -69,8 +69,9 @@ struct OwnedTree {
 }
 
 impl OwnedTree {
-    fn mount(build: impl FnOnce() -> Box<dyn Component>) -> Self {
-        let (list, built) = OwnedBuild::run(|| ComponentList::new(build()));
+    /// Mounts what `build` returns on a [`WindowRoot`], the one way a window's tree is mounted on every target and on either side of a hot-reload boundary.
+    fn mount(build: impl FnOnce() -> Box<dyn LayoutItem>) -> Self {
+        let (list, built) = OwnedBuild::run(|| ComponentList::new(WindowRoot::new(build())));
         Self {
             list,
             _build: built,
@@ -82,8 +83,8 @@ impl OwnedTree {
 pub struct LocalTree(OwnedTree);
 
 impl LocalTree {
-    /// Builds the root with `build` and mounts it, owning what the build made: dropping the tree frees all of it.
-    pub fn new(build: impl FnOnce() -> Box<dyn Component>) -> Self {
+    /// Builds the content with `build` and mounts it laid out against the window, as [`App::root`](crate::App::root) is, owning what the build made: dropping the tree frees all of it.
+    pub fn new(build: impl FnOnce() -> Box<dyn LayoutItem>) -> Self {
         Self(OwnedTree::mount(build))
     }
 }

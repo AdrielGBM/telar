@@ -4,7 +4,7 @@ use reactive_core::RwSignal;
 
 use crate::{
     Children, Color, Container, Direction, LayoutError, LayoutItem, LayoutStyle, LocaleTag, Size,
-    UnknownMode,
+    SurfaceFade, SurfaceTransition, UnknownMode,
 };
 
 use super::a11y::Rule;
@@ -115,19 +115,19 @@ pub enum Layout {
 
 /// What a preview's canvas is given by a compositor when the preview is a *surface* rather than a tree — `[preview "…" surface:360x240]`.
 ///
-/// A tree preview answers "does this component look right"; a surface preview answers "does this *window* look right": a definite size the content lays out against, and the enter transition its root plays.
+/// A tree preview answers "does this component look right"; a surface preview answers "does this *window* look right": a definite size the content lays out against, and the enter transition it plays with a [`SurfaceFade`](crate::SurfaceFade).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PreviewSurface {
     /// The size the compositor would give the surface, in logical px.
     pub width: f32,
     /// The height the compositor would give the surface, in logical px.
     pub height: f32,
-    /// Play the root's enter transition, so a transition that never settles shows up as a window still half-transparent when the frames run out.
+    /// Play the surface's enter transition, so a transition that never settles shows up as a window still half-transparent when the frames run out.
     pub animate: bool,
 }
 
 impl PreviewSurface {
-    /// A surface of `width` by `height` logical px whose root's enter transition is not played.
+    /// A surface of `width` by `height` logical px whose enter transition is not played.
     pub const fn new(width: f32, height: f32) -> Self {
         Self {
             width,
@@ -136,7 +136,7 @@ impl PreviewSurface {
         }
     }
 
-    /// This surface with its root's enter transition played.
+    /// This surface with its enter transition played.
     pub const fn animated(self) -> Self {
         Self {
             animate: true,
@@ -144,19 +144,20 @@ impl PreviewSurface {
         }
     }
 
-    /// `content` given the two things a compositor would give a surface: a definite size to lay out against, and the root that plays its enter transition.
-    ///
-    /// The size goes on a box around the root rather than on the root itself: [`crate::WindowRoot::wrapping`] fills its parent by design, which is how a surface's content stretches to its window, so it needs a parent with a size.
+    /// `content` given the two things a compositor would give a surface: a definite size, which it fills as a window's content fills the window (see [`App::root`](crate::App::root)), and the enter transition it plays.
     fn mount(self, content: Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-        let root = crate::WindowRoot::wrapping(content)?;
-        let root = if self.animate {
-            root.animate_in()
+        let content: Box<dyn LayoutItem> = if self.animate {
+            Box::new(SurfaceFade::new(content, SurfaceTransition::enter()))
         } else {
-            root
+            content
         };
+        // A grid's one cell stretches an auto-sized item over both axes and is what a percent size is a fraction of, as the window is for a layout root.
         Ok(Box::new(Container::new(
-            LayoutStyle::new().width(self.width).height(self.height),
-            vec![Box::new(root) as Box<dyn LayoutItem>],
+            LayoutStyle::new()
+                .display_grid()
+                .width(self.width)
+                .height(self.height),
+            vec![content],
         )?))
     }
 }

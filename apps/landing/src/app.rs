@@ -7,7 +7,7 @@ use telar::{App, Color, ScrollPage, reset_layout_runtime};
 pub struct LandingRoot;
 
 impl App for LandingRoot {
-    fn root(&self) -> Box<dyn telar::Component> {
+    fn root(&self) -> Box<dyn telar::LayoutItem> {
         reset_layout_runtime();
         let content = crate::home::home(
             crate::home::HomeProps::props().build(),

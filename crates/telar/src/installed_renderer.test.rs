@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use renderer_record::{Recording, RecordingFactory};
 use telar::{
-    App, AppConfig, Color, Component, DrawCommand, EventHandler, LayoutStyle, NoPaths, Platform,
+    App, AppConfig, Color, DrawCommand, EventHandler, LayoutItem, LayoutStyle, NoPaths, Platform,
     PlatformError, RectStyle, Rectangle, Text, TextStyle, Window, WindowConfig,
 };
 
@@ -76,7 +76,7 @@ struct Panel {
 }
 
 impl App for Panel {
-    fn root(&self) -> Box<dyn Component> {
+    fn root(&self) -> Box<dyn LayoutItem> {
         telar::reset_layout_runtime();
         let label = Text::new(
             || "installed".to_string(),

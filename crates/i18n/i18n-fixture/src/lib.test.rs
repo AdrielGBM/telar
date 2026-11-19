@@ -36,7 +36,7 @@ fn plural_selects_a_branch_per_locale() {
 mod plugin_override {
     use telar::i18n::{Catalog, Entry, Message, translate_with_override};
     use telar::testing::{mount, texts};
-    use telar::{Color, LayoutStyle, Text, TextStyle, WindowRoot};
+    use telar::{Color, LayoutStyle, Text, TextStyle};
 
     // The catalog `telar-components` ships its "Close" in, which a core crate may not depend on.
     static COMPONENTS: Catalog = Catalog {
@@ -66,7 +66,7 @@ mod plugin_override {
             )
             .expect("the label lays out")
         };
-        texts(&mount(|| WindowRoot::new(Box::new(label())), 320, 80))
+        texts(&mount(label, 320, 80))
     }
 
     // `rsx_modules!` installed the catalog it baked as this binary loaded, so the override reaches a plugin string with no call to install it.

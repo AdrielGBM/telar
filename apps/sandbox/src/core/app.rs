@@ -955,6 +955,12 @@ impl Drop for ShellPage {
     }
 }
 
+impl LayoutItem for ShellPage {
+    fn layout_node(&self) -> NodeId {
+        self.root
+    }
+}
+
 impl Component for ShellPage {
     fn view(&self) -> RenderNode {
         // Before the host's own view, which settles too and would leave nothing to report.
@@ -1066,7 +1072,7 @@ impl Component for ShellPage {
 pub struct SandboxRoot;
 
 impl App for SandboxRoot {
-    fn root(&self) -> Box<dyn telar::Component> {
+    fn root(&self) -> Box<dyn telar::LayoutItem> {
         reset_layout_runtime();
         // Every section's stack is hot state, not just the active one: a reload lands you back where you were reading, in the section you were reading, with each section's own history intact.
         let sections: Vec<usize> = (0..SECTIONS.len()).collect();

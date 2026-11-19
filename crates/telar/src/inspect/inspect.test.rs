@@ -4,8 +4,8 @@ use super::*;
 use crate::{
     AccessRule, AvailableSpace, Color, ComponentList, Container, LayoutError, LayoutItem,
     LayoutStyle, NestedCanvas, Rect, RectStyle, Role, ShapeStyle, SizeDimension, StyledContainer,
-    SurfaceCanvas, SurfaceFrame, Text, TextStyle, WindowRoot, box_item, compute_layout,
-    relayout_if_dirty, transform_clip_rect,
+    SurfaceCanvas, SurfaceFrame, Text, TextStyle, box_item, compute_layout, relayout_if_dirty,
+    transform_clip_rect,
 };
 
 const WINDOW: f32 = 400.0;
@@ -81,7 +81,7 @@ fn window(canvas: &Rc<NestedCanvas>, backdrop: Color) -> ComponentList {
     .unwrap();
     let root = content.layout_node();
     crate::set_surface_size(crate::Size::new(WINDOW, WINDOW));
-    let tree = ComponentList::new(WindowRoot::new(box_item(content)));
+    let tree = ComponentList::new(ui_core::WindowRoot::new(box_item(content)));
     compute_layout(
         root,
         AvailableSpace::Definite(WINDOW),
