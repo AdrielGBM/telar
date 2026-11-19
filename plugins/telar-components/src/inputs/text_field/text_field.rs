@@ -8,7 +8,7 @@ use telar::ControlSize;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Color, Container, Handler, Input, JustifyContent,
     Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, ModifiersState, NodeId,
-    PasteAnswer, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
+    PasteAnswer, PasteRequest, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
     SurfaceAmendment, Text, TextArea, TextStyle, TextWrap, amend_surface, box_item, children,
     focus::FocusId, signal, style_follows,
 };
@@ -141,7 +141,7 @@ pub struct TextFieldProps {
     /// Hears every key pressed while the field holds the keyboard, before the field acts on it; answering `true` takes the key from the field. What a field that walks a list of suggestions under it needs: the arrows and Enter are keys a focused field keeps for itself.
     #[props(some, default)]
     pub on_key: Option<FieldKeyHandler>,
-    /// Hears the text about to be pasted, however it was asked for (the shortcut or, where the target reports it, a menu or a middle click; see `docs/keyboard.md`), and answers [`PasteAnswer::Insert`] with the text to put in place of the selection or [`PasteAnswer::HandledByApp`] when the application took the paste itself and nothing is inserted. `None` (the default) inserts what was pasted. A paste it transforms is one change of `value`.
+    /// Hears the paste about to happen, with the pasted text, the field's current text and the byte range the paste replaces, however it was asked for (the shortcut or, where the target reports it, a menu or a middle click; see `docs/keyboard.md`), and answers [`PasteAnswer::Insert`] with the text to put in place of the selection or [`PasteAnswer::HandledByApp`] when the application took the paste itself and nothing is inserted. `None` (the default) inserts what was pasted. A paste it transforms is one change of `value`.
     #[props(some, default)]
     pub on_paste: Option<FieldPasteHandler>,
     /// The suggestion a field like that has its cursor on, so a reader announces it while the keyboard stays in the field. `None` (the default) points at nothing.
@@ -161,8 +161,8 @@ pub struct TextFieldProps {
 /// What [`TextFieldProps::on_key`] is called with: the key and the modifiers held with it.
 pub type FieldKeyHandler = Rc<dyn Fn(&Key, ModifiersState) -> bool>;
 
-/// What [`TextFieldProps::on_paste`] is called with: the text being pasted.
-pub type FieldPasteHandler = Rc<dyn Fn(&str) -> PasteAnswer>;
+/// What [`TextFieldProps::on_paste`] is called with: the pasted text, the field's current text and the range of it the paste replaces.
+pub type FieldPasteHandler = Rc<dyn for<'a> Fn(PasteRequest<'a>) -> PasteAnswer>;
 
 /// Builds a `text_field`: a bordered/padded box around `telar::Input`, or around `telar::TextArea` in a scroll when it is [`multiline`](TextFieldProps::multiline). The muted placeholder is the editor's own, drawn while the value is empty, so the field stays a live, always-mounted editor — tappable/typable from a cold start, with no swapped-in `Text` that would refuse focus.
 pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -471,7 +471,7 @@ fn single_line(
         input = input.on_key(move |key, modifiers| hook(key, modifiers));
     }
     if let Some(hook) = hooks.on_paste {
-        input = input.on_paste(move |text| hook(text));
+        input = input.on_paste(move |request| hook(request));
     }
     let (focus, node) = (input.focus_id(), input.layout_node());
     Ok(Editor {
@@ -511,7 +511,7 @@ fn several_lines(
         area = area.on_key(move |key, modifiers| hook(key, modifiers));
     }
     if let Some(hook) = hooks.on_paste {
-        area = area.on_paste(move |text| hook(text));
+        area = area.on_paste(move |request| hook(request));
     }
     let (focus, node) = (area.focus_id(), area.layout_node());
     let line = move || line_height(size, node);

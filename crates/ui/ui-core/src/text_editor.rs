@@ -48,7 +48,17 @@ const TAB_INSERT: &str = "    ";
 type KeyHandler = dyn Fn(&Key, ModifiersState) -> bool;
 
 /// What hears the text about to be pasted, and says what becomes of it.
-type PasteHandler = dyn Fn(&str) -> PasteAnswer;
+type PasteHandler = dyn for<'a> Fn(PasteRequest<'a>) -> PasteAnswer;
+
+/// What an editor's paste hook is asked: the text arriving and where in the field it lands.
+///
+/// `pasted` is whatever the gesture brought, before the editor admits it. `text` is the field's value as it stands and `selection` the bytes of it the paste replaces: an empty range is the caret, where the paste is inserted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PasteRequest<'a> {
+    pub pasted: &'a str,
+    pub text: &'a str,
+    pub selection: Range<usize>,
+}
 
 /// What an editor's paste hook answers for the text being pasted.
 ///
@@ -614,8 +624,20 @@ impl Editor {
     pub(crate) fn paste(&mut self, pasted: &str) -> EventResult {
         self.blink.wake();
         self.goal_x = None;
+        let current = self.value.get();
+        let selection = match self.selection(&current) {
+            Some((from, to)) => from..to,
+            None => {
+                let caret = self.caret_at(&current);
+                caret..caret
+            }
+        };
         let inserted = match &self.on_paste {
-            Some(hook) => match hook(pasted) {
+            Some(hook) => match hook(PasteRequest {
+                pasted,
+                text: &current,
+                selection,
+            }) {
                 PasteAnswer::Insert(text) => text,
                 PasteAnswer::HandledByApp => return EventResult::Handled,
             },

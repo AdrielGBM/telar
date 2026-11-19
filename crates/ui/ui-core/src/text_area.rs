@@ -12,7 +12,7 @@ use crate::Handler;
 use crate::focus::{self, FocusId};
 use crate::layout_item::LeafWidget;
 use crate::layout_leaf::LayoutLeaf;
-use crate::text_editor::{Caret, Editor, Lines, PasteAnswer, TabKey, Underline};
+use crate::text_editor::{Caret, Editor, Lines, PasteAnswer, PasteRequest, TabKey, Underline};
 
 /// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input), and the same editor underneath: the caret, the selection, the presses, drags, double- and triple-clicks that make one, the clipboard and an input method's composition behave alike in both. A base primitive: unstyled (wrap it in a `box` for a border/background). Enter breaks the line, Backspace/Delete join lines, the arrows move in all four directions and Home/End go to the ends of the row; a triple-click takes the line it lands in. Tab and Shift+Tab move focus on and back, as from a field of one line, unless [`tab_key`](Self::tab_key) makes the area indent.
 ///
@@ -75,8 +75,11 @@ impl TextArea {
         self
     }
 
-    /// Hears the text about to be pasted, however it was asked for, and answers what becomes of it. See [`Input::on_paste`](crate::Input::on_paste).
-    pub fn on_paste(mut self, f: impl Fn(&str) -> PasteAnswer + 'static) -> Self {
+    /// Hears the paste about to happen, however it was asked for, with the text it brings and where it lands, and answers what becomes of it. See [`Input::on_paste`](crate::Input::on_paste).
+    pub fn on_paste(
+        mut self,
+        f: impl for<'a> Fn(PasteRequest<'a>) -> PasteAnswer + 'static,
+    ) -> Self {
         self.editor.on_paste = Some(Box::new(f));
         self
     }

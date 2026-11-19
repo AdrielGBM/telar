@@ -657,12 +657,12 @@ fn a_paste_hook_decides_what_a_field_of_either_kind_inserts() {
             TextFieldProps::props()
                 .value(value)
                 .multiline(multiline)
-                .on_paste(Rc::new(move |text: &str| match text.strip_prefix("app:") {
+                .on_paste(Rc::new(move |request: PasteRequest| match request.pasted.strip_prefix("app:") {
                     Some(_) => {
                         value.set("taken".to_string());
                         PasteAnswer::HandledByApp
                     }
-                    None => PasteAnswer::Insert(text.to_uppercase()),
+                    None => PasteAnswer::Insert(request.pasted.to_uppercase()),
                 }))
                 .build(),
         );
@@ -680,5 +680,35 @@ fn a_paste_hook_decides_what_a_field_of_either_kind_inserts() {
             text: "app:x".into(),
         });
         assert_eq!(value.get(), "taken", "multiline: {multiline}");
+    }
+}
+
+/// The hook learns the field's text and where the paste lands in it, for a field of one line and for one of several.
+#[test]
+fn a_paste_hook_is_told_the_field_s_text_and_where_the_paste_lands() {
+    for multiline in [false, true] {
+        let value = signal("hello".to_string());
+        let heard = Rc::new(std::cell::RefCell::new(None));
+        let hearing = Rc::clone(&heard);
+        let (field, rect) = laid_out_field(
+            TextFieldProps::props()
+                .value(value)
+                .multiline(multiline)
+                .on_paste(Rc::new(move |request: PasteRequest| {
+                    *hearing.borrow_mut() = Some((request.text.to_string(), request.selection));
+                    PasteAnswer::HandledByApp
+                }))
+                .build(),
+        );
+        let mut tree = ComponentList::new(field);
+        let _ = tree.commands();
+        tree.on_event(&press(
+            (rect.x + rect.width / 2.0) as f64,
+            (rect.y + rect.height / 2.0) as f64,
+        ));
+        tree.on_event(&Event::Paste { text: "x".into() });
+        let (text, selection) = heard.borrow().clone().expect("the hook was asked");
+        assert_eq!(text, "hello", "multiline: {multiline}");
+        assert!(selection.is_empty(), "a caret is an empty range, multiline: {multiline}");
     }
 }

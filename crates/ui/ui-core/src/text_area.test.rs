@@ -1096,9 +1096,9 @@ fn an_area_hands_a_paste_of_several_lines_to_the_hook_whole() {
     let (area, value) = focused("");
     let heard = Rc::new(RefCell::new(String::new()));
     let hearing = Rc::clone(&heard);
-    let mut area = area.on_paste(move |text| {
-        *hearing.borrow_mut() = text.to_string();
-        PasteAnswer::Insert(text.replace("# ", ""))
+    let mut area = area.on_paste(move |request| {
+        *hearing.borrow_mut() = request.pasted.to_string();
+        PasteAnswer::Insert(request.pasted.replace("# ", ""))
     });
     area.on_event(&Event::Paste {
         text: "# One\n# Two".into(),
@@ -1115,4 +1115,17 @@ fn an_area_whose_app_handled_the_paste_inserts_nothing() {
         text: "x\ny".into(),
     });
     assert_eq!(value.get(), "kept");
+}
+
+#[test]
+fn an_area_tells_the_hook_where_in_its_text_the_paste_lands() {
+    let (area, _value) = focused("one\ntwo");
+    let heard = Rc::new(RefCell::new(None));
+    let hearing = Rc::clone(&heard);
+    let mut area = area.on_paste(move |request| {
+        *hearing.borrow_mut() = Some((request.text.to_string(), request.selection));
+        PasteAnswer::HandledByApp
+    });
+    area.on_event(&Event::Paste { text: "x".into() });
+    assert_eq!(*heard.borrow(), Some(("one\ntwo".to_string(), 7..7)));
 }

@@ -1137,9 +1137,9 @@ fn a_hook_can_insert_other_text_in_place_of_the_selection() {
     let (input, value) = focused_input("hello world");
     let heard = Rc::new(RefCell::new(Vec::new()));
     let hearing = Rc::clone(&heard);
-    let mut input = input.on_paste(move |text| {
-        hearing.borrow_mut().push(text.to_string());
-        PasteAnswer::Insert(text.to_uppercase())
+    let mut input = input.on_paste(move |request| {
+        hearing.borrow_mut().push(request.pasted.to_string());
+        PasteAnswer::Insert(request.pasted.to_uppercase())
     });
     input.on_event(&chord(Key::Char('a')));
     input.on_event(&pasted("abc"));
@@ -1159,8 +1159,8 @@ fn a_hook_can_insert_other_text_in_place_of_the_selection() {
 fn a_paste_the_app_handled_inserts_nothing() {
     let (input, value) = focused_input("hello");
     let taken = value;
-    let mut input = input.on_paste(move |text| {
-        taken.set(format!("app:{text}"));
+    let mut input = input.on_paste(move |request| {
+        taken.set(format!("app:{}", request.pasted));
         PasteAnswer::HandledByApp
     });
     assert_eq!(input.on_event(&pasted("block")), EventResult::Handled);
@@ -1184,7 +1184,7 @@ fn a_transformed_paste_is_one_change_of_the_value() {
     let steps = Rc::new(RefCell::new(Vec::<String>::new()));
     let kept = Rc::clone(&steps);
     reactive_core::effect(move || kept.borrow_mut().push(value.get()));
-    let mut input = input.on_paste(|text| PasteAnswer::Insert(format!("<{text}>")));
+    let mut input = input.on_paste(|request| PasteAnswer::Insert(format!("<{}>", request.pasted)));
     input.on_event(&chord(Key::Char('a')));
     steps.borrow_mut().clear();
 
@@ -1202,7 +1202,8 @@ fn a_transformed_paste_is_one_change_of_the_value() {
 #[test]
 fn a_single_line_field_keeps_one_line_whatever_the_hook_answers() {
     let (input, value) = focused_input("");
-    let mut input = input.on_paste(|text| PasteAnswer::Insert(format!("{text}\nmore")));
+    let mut input =
+        input.on_paste(|request| PasteAnswer::Insert(format!("{}\nmore", request.pasted)));
     input.on_event(&pasted("a"));
     assert!(!value.get().contains('\n'), "{:?}", value.get());
 }
@@ -1214,4 +1215,24 @@ fn a_paste_is_not_taken_by_a_field_that_is_not_the_keyboard_target() {
     focus::clear();
     assert_eq!(input.on_event(&pasted("x")), EventResult::Ignored);
     assert_eq!(value.get(), "hi");
+}
+
+/// The hook is told what the paste lands on: the value as it stands and the bytes it replaces, the caret as an empty range.
+#[test]
+fn a_hook_is_told_the_text_and_the_selection_the_paste_replaces() {
+    let (input, _value) = focused_input("hello world");
+    let heard = Rc::new(RefCell::new(Vec::new()));
+    let hearing = Rc::clone(&heard);
+    let mut input = input.on_paste(move |request| {
+        hearing
+            .borrow_mut()
+            .push((request.text.to_string(), request.selection));
+        PasteAnswer::HandledByApp
+    });
+    input.on_event(&pasted("x"));
+    input.on_event(&chord(Key::Char('a')));
+    input.on_event(&pasted("x"));
+    let heard = heard.borrow();
+    assert_eq!(heard[0], ("hello world".to_string(), 11..11));
+    assert_eq!(heard[1], ("hello world".to_string(), 0..11));
 }

@@ -211,7 +211,7 @@ pub use svg::Svg;
 pub use text::{IntoRubyReading, Text, TextRun};
 pub use text_area::TextArea;
 pub use text_edit::DOUBLE_CLICK;
-pub use text_editor::{Caret, PasteAnswer, TabKey, Underline};
+pub use text_editor::{Caret, PasteAnswer, PasteRequest, TabKey, Underline};
 pub use text_input::text_input;
 pub use theme_core::follow_theme;
 pub use theme_provider::{ScopeProvider, provide_theme};

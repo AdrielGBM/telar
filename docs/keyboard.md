@@ -271,8 +271,10 @@ brings the caret's row into view of it as the caret moves, rows typed past the b
 ### Pasting
 
 Every paste reaches an editor as one piece of text, whichever gesture asked for it, and `on_paste` on `Input`,
-`TextArea` and `text_field` hears it before anything is inserted. The hook takes the text and answers a
-`PasteAnswer`:
+`TextArea` and `text_field` hears it before anything is inserted. The hook takes a `PasteRequest` and answers a
+`PasteAnswer`. The request carries `pasted`, the text arriving as the gesture brought it; `text`, the field's
+current value; and `selection`, the byte range of `text` the paste replaces (empty at the caret). An application
+that spreads a paste over several fields reads the last two to tell, for instance, whether it lands mid-line:
 
 - `PasteAnswer::Insert(text)` inserts `text` in place of the selection, or at the caret when nothing is selected.
   A field of one line still flattens line breaks in it, as it does for a paste with no hook.

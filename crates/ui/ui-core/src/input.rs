@@ -12,7 +12,7 @@ use crate::Handler;
 use crate::focus;
 use crate::layout_item::LeafWidget;
 use crate::layout_leaf::LayoutLeaf;
-use crate::text_editor::{Caret, Editor, Lines, PasteAnswer, Underline};
+use crate::text_editor::{Caret, Editor, Lines, PasteAnswer, PasteRequest, Underline};
 
 /// A single-line editable text field bound to a `RwSignal<String>`. A base primitive: unstyled (no border or background — wrap it in a `box` for the look). It requests focus on a press, and edits the bound signal from key events while focused, drawing a caret at the insertion point.
 ///
@@ -86,10 +86,13 @@ impl Input {
         self
     }
 
-    /// Hears the text about to be pasted, however it was asked for: the shortcut or, where the target reports it, a menu or a middle click (see `docs/keyboard.md`). It answers [`PasteAnswer::Insert`] with the text to put in place of the selection, or [`PasteAnswer::HandledByApp`] when it took the paste and nothing is to be inserted. A field with no hook inserts what was pasted.
+    /// Hears the paste about to happen, however it was asked for: the shortcut or, where the target reports it, a menu or a middle click (see `docs/keyboard.md`). The [`PasteRequest`] carries the pasted text, the field's current text and the byte range of it the paste replaces (empty at the caret). It answers [`PasteAnswer::Insert`] with the text to put in place of the selection, or [`PasteAnswer::HandledByApp`] when it took the paste and nothing is to be inserted. A field with no hook inserts what was pasted.
     ///
     /// What a field that must not take the clipboard as it is needs: a hook on the key could not see a paste that never came through the keyboard. A paste the hook transforms is one change of the bound value.
-    pub fn on_paste(mut self, f: impl Fn(&str) -> PasteAnswer + 'static) -> Self {
+    pub fn on_paste(
+        mut self,
+        f: impl for<'a> Fn(PasteRequest<'a>) -> PasteAnswer + 'static,
+    ) -> Self {
         self.editor.on_paste = Some(Box::new(f));
         self
     }

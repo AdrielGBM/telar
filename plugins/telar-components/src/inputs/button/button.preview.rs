@@ -51,6 +51,22 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Inputs/Button")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes")),
+        preview!(button: ButtonProps, "Disabled", |p| {
+            button(
+                ButtonProps::props()
+                    .label(p.arg("label", "Save"))
+                    .variant(p.arg("variant", Variant::Solid))
+                    .disabled(true)
+                    .build(),
+            )
+        })
+        .title("Inputs/Button")
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            canvas.press(Key::Named(NamedKey::Enter))?;
+            canvas.expect_action("on_press", 0)
+        }),
         preview!(button: ButtonProps, "Counting presses", |p| {
             let presses = p.signal("presses", 0u32);
             button(

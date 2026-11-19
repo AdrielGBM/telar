@@ -490,3 +490,93 @@ fn a_hugging_button_pads_its_label_evenly_on_both_sides() {
     assert!((before - pad).abs() <= 0.5, "{before} {after}");
     assert!((after - pad).abs() <= 0.5, "{before} {after}");
 }
+
+fn press_and_release(tree: &mut ComponentList, rect: telar::Rect) {
+    let (x, y) = ((rect.x + rect.width / 2.0) as f64, (rect.y + rect.height / 2.0) as f64);
+    for event in [
+        Event::PointerPressed {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        },
+        Event::PointerReleased {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        },
+    ] {
+        tree.on_event(&event);
+    }
+}
+
+fn enter() -> Event {
+    Event::KeyPressed {
+        key: telar::Key::Named(telar::NamedKey::Enter),
+        modifiers: telar::ModifiersState::default(),
+        unmodified: None,
+    }
+}
+
+fn exposed_button() -> telar::focus::Exposed {
+    telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::Button)
+        .expect("the button is exposed as a button")
+}
+
+/// A disabled button is announced as unavailable, is not a tab stop, and neither a tap nor Enter fires it; once enabled again it fires.
+#[test]
+fn a_disabled_button_is_announced_as_unavailable_and_does_not_fire() {
+    let fired = Rc::new(Cell::new(0));
+    let disabled = telar::signal(true);
+    telar::focus::clear();
+    let sink = fired.clone();
+    let mut tree = laid_out(
+        ButtonProps::props()
+            .label("OK")
+            .disabled(Reactive::of(move || disabled.get()))
+            .on_press(move || sink.set(sink.get() + 1))
+            .build(),
+    );
+    let rect = tree.commands().iter().find_map(|c| match c {
+        DrawCommand::Rect { rect, .. } => Some(*rect),
+        _ => None,
+    });
+    let rect = rect.expect("the button painted its box");
+
+    assert!(!exposed_button().enabled);
+    press_and_release(&mut tree, rect);
+    telar::focus::focus_next();
+    tree.on_event(&enter());
+    assert_eq!(fired.get(), 0);
+
+    disabled.set(false);
+    let _ = tree.commands();
+    assert!(exposed_button().enabled);
+    press_and_release(&mut tree, rect);
+    assert_eq!(fired.get(), 1);
+}
+
+#[test]
+fn a_disabled_button_draws_its_label_muted() {
+    let ink_of = |disabled: bool| {
+        let tree = laid_out(
+            ButtonProps::props()
+                .label("OK")
+                .variant(Variant::Outline)
+                .disabled(disabled)
+                .build(),
+        );
+        tree.commands()
+            .iter()
+            .find_map(|c| match c {
+                DrawCommand::Text { style, .. } => Some(style.color.solid_color()),
+                _ => None,
+            })
+            .expect("the button drew its label")
+    };
+    assert_ne!(ink_of(true), ink_of(false));
+    assert_eq!(ink_of(true), shared::muted());
+}

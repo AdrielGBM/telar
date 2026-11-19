@@ -51,10 +51,13 @@ pub struct ButtonProps {
     /// The colour the variant is drawn in. `None` (the default) is the theme's primary. A closure, so a theme token re-reads on a switch.
     #[props(some, into, default)]
     pub color: Option<Reactive<Color>>,
+    /// Whether the button is unavailable. While true it takes no pointer, key or assistive press, is skipped by Tab, is announced as disabled, and draws muted.
+    #[props(into, default)]
+    pub disabled: Reactive<bool>,
     /// Runs when the button is pressed.
     #[props(default = Handler::from(|| {}))]
     pub on_press: Handler,
-    /// Amends the paint of the button's box — its **principal surface** — at rest, hovered and pressed. See [`telar::SurfaceStyle`] for when a theme token or [`ButtonTokens`] is the right instrument instead.
+    /// Amends the paint of the button's box — its **principal surface** — at rest, hovered, pressed and disabled. See [`telar::SurfaceStyle`] for when a theme token or [`ButtonTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
 }
@@ -74,23 +77,31 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         size,
         variant,
         color,
+        disabled,
         on_press,
         style,
     } = props;
 
     let label_tone = color.clone();
+    let label_disabled = disabled.clone();
     let label_widget = Text::declaring(
         move || label.get(),
         LayoutStyle::new(),
         move |t| {
             let text = shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::NoWrap);
-            match label_color(variant, tone(&label_tone)) {
+            let ink = if label_disabled.get() {
+                Some(shared::muted())
+            } else {
+                label_color(variant, tone(&label_tone))
+            };
+            match ink {
                 Some(color) => text.with_color(color),
                 None => text,
             }
         },
     )?;
 
+    let idle_style = style.clone();
     let paint =
         Rc::new(move |state: State| amend_surface(surface(variant, tone(&color), state), &style));
     let (rest, hover, press) = (paint.clone(), paint.clone(), paint);
@@ -102,6 +113,8 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     .styled_by(move || shell(size))
     .hover_style(move |_r| hover(State::Hovered))
     .active_style(move |_r| press(State::Pressed))
+    .disabled(move || disabled.get())
+    .disabled_style(move |_r| amend_surface(disabled_surface(variant), &idle_style))
     .control(Role::Button)
     .on_press(on_press);
     Ok(box_item(container))
@@ -141,6 +154,18 @@ fn surface(variant: Variant, tone: Option<Color>, state: State) -> RectStyle {
             State::Hovered => rect.with_fill(shared::hover_wash()),
             State::Pressed => rect.with_fill(shared::pressed_wash()),
         },
+    }
+}
+
+/// What a disabled button shows in place of its colour: the theme's `muted`, as a wash where the variant is filled and as the frame where it is outlined, so it reads as present but out of reach.
+fn disabled_surface(variant: Variant) -> RectStyle {
+    let tokens = ButtonTokens::current();
+    let rect = RectStyle::default().with_radius(BorderRadius::all(tokens.radius()));
+    let muted = shared::muted();
+    match variant {
+        Variant::Solid | Variant::Soft => rect.with_fill(washed(muted, shared::held_wash())),
+        Variant::Outline => rect.with_border(Border::uniform(muted, tokens.border_width())),
+        Variant::Ghost => rect,
     }
 }
 
