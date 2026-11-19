@@ -111,6 +111,7 @@ impl<R: Clone + Debug + Eq + 'static> NavHost<R> {
             LayoutStyle::new()
                 .flex_column()
                 .flex_grow(1.0)
+                .min_height(0.0)
                 .width(SizeDimension::Percent(1.0)),
             &[],
         )?;

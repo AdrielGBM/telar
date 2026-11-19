@@ -591,3 +591,36 @@ fn a_frame_for_a_tab_the_stacks_do_not_declare_is_refused() {
     let log = frame_log();
     assert!(host.with_frame(7, framing(7, &log)).is_err());
 }
+
+#[test]
+fn tall_pages_leave_the_host_the_height_it_is_given() {
+    reset_layout_runtime();
+    let stacks = TabStacks::new(signal(0u8), &[0, 1], |tab| Navigator::new(*tab));
+    let host = TabHost::new(stacks, |_tab: &u8, _route: &u8| {
+        let (node, _rect) = new_leaf(
+            LayoutStyle::new()
+                .width(SizeDimension::Percent(1.0))
+                .height(2000.0),
+        )?;
+        Ok(Box::new(TestPage {
+            id: (0, 0),
+            node,
+            dropped: Rc::new(RefCell::new(Vec::new())),
+        }) as Box<dyn NavPage>)
+    })
+    .unwrap();
+    let host_node = host.layout_node();
+    let column = telar::Container::new(
+        LayoutStyle::new().flex_column().width(300.0).height(120.0),
+        vec![Box::new(host) as Box<dyn LayoutItem>],
+    )
+    .unwrap();
+    compute_layout(
+        column.layout_node(),
+        AvailableSpace::Definite(300.0),
+        AvailableSpace::Definite(120.0),
+    )
+    .ok();
+    assert_eq!(absolute_rect(host_node).map(|r| r.height), Some(120.0));
+    drop(column);
+}
