@@ -2170,3 +2170,77 @@ fn a_reader_hears_each_base_with_its_reading() {
         ["読む(よ)"]
     );
 }
+
+/// A list item a person moves through is named by its words as it takes focus, and still holds what it draws: a heading inside it is read as a heading at its level and a sentence as text of its own, while a button inside it keeps its label to itself.
+#[test]
+fn a_focusable_list_item_is_named_by_its_words_and_keeps_what_it_holds() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let item = |children: Vec<Box<dyn LayoutItem>>| {
+        StyledContainer::new(
+            LayoutStyle::new().flex_row(),
+            |_r| RectStyle::default(),
+            children,
+        )
+        .unwrap()
+        .control(Role::ListItem)
+    };
+    let fold = StyledContainer::new(
+        LayoutStyle::new(),
+        |_r| RectStyle::default(),
+        vec![box_item(words("Fold"))],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {});
+    let heading = item(vec![
+        box_item(fold),
+        box_item(words("Chapter").a11y_role(Role::Heading(HeadingLevel::Two))),
+    ]);
+    let sentence = item(vec![box_item(words("It rained."))]);
+    let list = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(heading), box_item(sentence)],
+    )
+    .unwrap()
+    .role(Role::List);
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(list)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    let list = at(&nodes, Role::List, "");
+    assert_eq!(
+        held(&nodes, Some(list)),
+        [(Role::ListItem, "Chapter"), (Role::ListItem, "It rained.")]
+    );
+    assert_eq!(
+        held(&nodes, Some(at(&nodes, Role::ListItem, "Chapter"))),
+        [
+            (Role::Button, "Fold"),
+            (Role::Heading(HeadingLevel::Two), "Chapter")
+        ]
+    );
+    assert_eq!(
+        held(&nodes, Some(at(&nodes, Role::ListItem, "It rained."))),
+        [(Role::Label, "It rained.")]
+    );
+}
+
+/// A structure a person operates holds the words drawn in it outside its own controls rather than being called by them: a list box with a caption over its options is not named by the caption.
+#[test]
+fn an_operated_structure_is_not_named_by_what_it_shows() {
+    reset_layout_runtime();
+    focus::clear();
+    let options = StyledContainer::new(
+        LayoutStyle::new().flex_column(),
+        |_r| RectStyle::default(),
+        vec![box_item(words("No results"))],
+    )
+    .unwrap()
+    .control(Role::ListBox);
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(options)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    let list = at(&nodes, Role::ListBox, "");
+    assert_eq!(held(&nodes, Some(list)), [(Role::Label, "No results")]);
+}

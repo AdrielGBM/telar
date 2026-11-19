@@ -307,6 +307,8 @@ impl Play {
     /// Walks the stops one at a time, each read where the keyboard brings it into view, beside the same view with nothing focused. What a reader is told about the canvas is read once, before the walk: each stop then reads only where its own box and its cursor's stand now, so a canvas of thousands of stops costs each its own frames rather than a snapshot of the whole canvas.
     fn check_focus(&self) -> a11y::Report {
         let canvas = self.canvas();
+        // The walk is the reader's keyboard, whose first key ends an arrival at an anchor as a real one does; left running, the arrival would pull each stop the walk brings into view back out of it.
+        canvas.with_entered(ui_core::reader_moved);
         let order = canvas.with_entered(focus::tab_order);
         canvas.with_entered(focus::clear);
         self.settle_now();

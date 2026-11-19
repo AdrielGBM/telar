@@ -5,16 +5,17 @@ use telar::preview::{
     Layout, Matrix, Play, PlayError, PlayResult, PreviewEntry, Query, by_role, by_text, preview,
 };
 use telar::{
-    AlignItems, AreaLayout, Axis, Container, DragSession, DropArea, DropPlace, Key, LayoutError,
-    LayoutItem, LayoutScrollArea, LayoutStyle, NamedKey, Reactive, RectStyle, Role, RwSignal,
-    StyledContainer, VirtualRows, box_item, memo, signal, track_layout,
+    Accessible, AlignItems, AreaLayout, Axis, Container, DragSession, DropArea, DropPlace,
+    HeadingLevel, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Link, NamedKey,
+    Reactive, RectStyle, Role, RwSignal, StyledContainer, VirtualRows, anchor, box_item, memo,
+    signal, track_layout,
 };
 
 use super::sample;
 use crate::layout::reorder_zones::reorder_zones::{
     DropPreview, ReorderGroup, ReorderZoneProps, Slot, VirtualZoneProps, apply_zone_move,
 };
-use crate::{ButtonProps, button};
+use crate::{ButtonProps, LinkProps, button, link};
 
 /// Drags what `from` finds to the point `down` of the way down what `to` finds, as a hand carries a row onto another.
 fn drag_onto(canvas: &mut Play, from: Query, to: Query, down: f32) -> PlayResult {
@@ -284,6 +285,18 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let scroll = LayoutScrollArea::new_with(
                 LayoutStyle::column().flex_grow(1.0).min_height(0.0),
                 move |viewport| {
+                    let rows = VirtualRows::new(viewport, 44.0);
+                    rows.page_anchors(move || {
+                        lines.with(|lines| {
+                            lines
+                                .iter()
+                                .filter_map(|line| match line {
+                                    Line::Heading(section) => Some((*line, section_anchor(*section))),
+                                    Line::Sentence(_) => None,
+                                })
+                                .collect()
+                        })
+                    });
                     let zone = group.virtual_zone(
                         VirtualZoneProps::props()
                             .items(Reactive::of(move || lines.get()))
@@ -293,7 +306,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                                     sample::tile(Reactive::of(move || format!("Sentence {id}")))
                                 }
                             }))
-                            .rows(VirtualRows::new(viewport, 44.0))
+                            .rows(rows)
                             .build(),
                     )?;
                     Ok(box_item(Container::new(
@@ -301,6 +314,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         vec![
                             sample::text(
                                 "100 sections of 30 sentences: only what the scroll shows is built",
+                            )?,
+                            link(
+                                LinkProps::props()
+                                    .label("Go to section 80")
+                                    .to(anchor(&section_anchor(80)))
+                                    .build(),
                             )?,
                             zone,
                         ],
@@ -323,7 +342,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             expect_place(canvas, &sentence(0), 4)?;
             canvas.click(by_role(Role::Button).named("Fold section 0"))?;
             canvas.expect_absent(sentence(1))?;
-            expect_place(canvas, &by_role(Role::ListItem).named("Section 1"), 2)
+            expect_place(canvas, &by_role(Role::ListItem).named("Section 1"), 2)?;
+            let heading = |section: usize| {
+                by_role(Role::Heading(HeadingLevel::Two)).named(format!("Section {section}"))
+            };
+            canvas.expect(heading(1))?;
+            canvas.expect_absent(heading(80))?;
+            canvas.click(by_role(Role::Link(Link::default())).named("Go to section 80"))?;
+            canvas.expect(heading(80))
         }),
     ]
 }
@@ -457,10 +483,23 @@ fn heading(
             .padding_top(12.0)
             .padding_bottom(4.0),
         vec![
-            sample::text_of(Reactive::of(move || format!("Section {section}")))?,
+            box_item(
+                Container::new(
+                    LayoutStyle::new(),
+                    vec![sample::text_of(Reactive::of(move || {
+                        format!("Section {section}")
+                    }))?],
+                )?
+                .a11y_role(Role::Heading(HeadingLevel::Two)),
+            ),
             fold,
         ],
     )?))
+}
+
+/// The anchor a link to section `section` names.
+fn section_anchor(section: usize) -> String {
+    format!("section-{section}")
 }
 
 /// That the item `query` matches says it stands at `place` among all the items, counted from one.

@@ -573,6 +573,15 @@ role of their own inside it, holding the link runs and controls among them; its 
 again as text of their own. AccessKit gets its level (`level`, counted from zero) and the terminal says it
 (`Settings, heading, level 1`). A surface nested in the frame joins the tree inside the node it is drawn in.
 
+What a control draws names it, as a button is named by its label and its words are read as nothing else, except
+where the control holds them as content: a heading inside it stays a heading at its level, each run of text a
+node of its own, and the controls inside it keep their own names. A list item a person focuses, such as an item
+of a `ReorderGroup`, does both: it holds what it draws and is named by the words drawn outside the controls
+inside it, which is what a reader hears as it takes focus, unless `a11y_label:` names it. A structure a person
+operates (`listbox`, `tree`, `grid`, `menu`, `toolbar`, `tablist`, `radiogroup`, `list`, `dialog`) and a
+`tabpanel` hold what they draw and are never named by it, and so does a scroll area that is a stop and was
+given a name.
+
 AccessKit gets the same tree: every node is a child of the one it sits in, and the window holds the rest. A node is named by its label, except a line of text (`Label`), whose words are its value, where every AccessKit adapter reads them. A grid
 holds its rows and each row its cells; the grid says its row count — from the `size` its rows say, so a reader
 hears every row of a table that builds a screenful — and its column count, each row its index, and each cell its

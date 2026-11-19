@@ -2,17 +2,21 @@
 
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use reactive_core::{ReadSignal, RwSignal, after_settle, batch, effect, signal};
+use reactive_core::{
+    ReadSignal, RwSignal, after_settle, batch, effect, on_cleanup, signal, untrack,
+};
 use renderer_core::RectStyle;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::context::{surface_size, track_layout};
 use crate::height_index::HeightIndex;
 use crate::keyed_values::KeyedValues;
 use crate::layout_item::LayoutItem;
+use crate::link::{AnchorRegistration, register_anchor};
 use crate::reactive_list::ReactiveList;
 use crate::scroll_area::ScrollViewport;
 use crate::styled_container::StyledContainer;
@@ -165,7 +169,7 @@ impl VirtualList {
         S: Fn() -> Vec<Item> + 'static,
         B: Fn(usize, ReadSignal<Item>) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
     {
-        let slots = measured_slots(&rows.0, overscan, source, |at, _| at as u64);
+        let slots = measured_slots(&rows.0, overscan, source, |at, _| hash_key(&at));
         by_handle(container_style, slots, rows.0.origin, Some(rows.0), build)
     }
 }
@@ -519,6 +523,70 @@ impl VirtualRows {
             .set((!rows.is_measured(index)).then_some((index, margin)));
         rows.bring_into_view(index, margin);
     }
+
+    /// Makes rows of the list anchors a link can reach whether they are built or not, as [`PageAnchor::page_anchor`](crate::PageAnchor::page_anchor) makes a box one: `anchors` names each anchor and the key of the row it stands for, the key the list was given for that row (its index, in a list keyed by place), and is read again whenever what it reads changes.
+    ///
+    /// Following one, or arriving at an address that names one, brings its row to the top of the view, below the header and the arrival margin, then the view to the top of every scroll around it, and keeps it there while the rows around it are measured, until the reader moves the page. A name belongs to one row; the anchors are withdrawn when the owner that made them is disposed, so make them where the list is built.
+    pub fn page_anchors<Key, Name>(&self, anchors: impl Fn() -> Vec<(Key, Name)> + 'static)
+    where
+        Key: Hash,
+        Name: Into<Arc<str>>,
+    {
+        let named: Rc<RefCell<HashMap<Arc<str>, u64>>> = Rc::default();
+        let held: Rc<RefCell<HashMap<Arc<str>, AnchorRegistration>>> = Rc::default();
+        {
+            let (rows, named, held) = (Rc::clone(&self.0), Rc::clone(&named), Rc::clone(&held));
+            effect(move || {
+                let fresh: HashMap<Arc<str>, u64> = anchors()
+                    .into_iter()
+                    .map(|(key, name)| (name.into(), hash_key(&key)))
+                    .collect();
+                let added: Vec<Arc<str>> = {
+                    let held = held.borrow();
+                    fresh
+                        .keys()
+                        .filter(|name| !held.contains_key(*name))
+                        .cloned()
+                        .collect()
+                };
+                *named.borrow_mut() = fresh;
+                held.borrow_mut()
+                    .retain(|name, _| named.borrow().contains_key(name));
+                for name in added {
+                    let reveal = {
+                        let (rows, named, name) =
+                            (Rc::clone(&rows), Rc::clone(&named), name.clone());
+                        move || {
+                            let key = named.borrow().get(&name).copied();
+                            key.is_some_and(|key| rows.reveal_key_at_start(key))
+                        }
+                    };
+                    let registration = register_anchor(&name, reveal);
+                    held.borrow_mut().insert(name, registration);
+                }
+            });
+        }
+        {
+            let (rows, named, held) = (Rc::clone(&self.0), Rc::clone(&named), Rc::clone(&held));
+            let placed: RefCell<HashMap<Arc<str>, (f32, f32, f32)>> = RefCell::default();
+            effect(move || {
+                rows.revision.get();
+                rows.origin.get();
+                let view = rows.viewport.rect().get().height;
+                let margin = rows.viewport.arrival_margin().top;
+                let moved = untrack(|| {
+                    rows.moved_anchors(&named.borrow(), &mut placed.borrow_mut(), (view, margin))
+                });
+                let held = held.borrow();
+                for name in moved {
+                    if let Some(registration) = held.get(&name) {
+                        registration.moved();
+                    }
+                }
+            });
+        }
+        on_cleanup(move || held.borrow_mut().clear());
+    }
 }
 
 impl Rows {
@@ -716,6 +784,42 @@ impl Rows {
                 rows.bring_into_view(index, margin);
             }
         });
+    }
+
+    /// The anchors in `named` whose rows stand somewhere else in the content than `placed` remembers, or in a view of another height or margin, `view`, remembering where each stands now: the ones an arrival at them has to follow.
+    fn moved_anchors(
+        &self,
+        named: &HashMap<Arc<str>, u64>,
+        placed: &mut HashMap<Arc<str>, (f32, f32, f32)>,
+        (height, margin): (f32, f32),
+    ) -> Vec<Arc<str>> {
+        let at: HashMap<u64, usize> = self
+            .keys
+            .borrow()
+            .iter()
+            .enumerate()
+            .map(|(index, key)| (*key, index))
+            .collect();
+        let heights = self.heights.borrow();
+        placed.retain(|name, _| named.contains_key(name));
+        named
+            .iter()
+            .filter_map(|(name, key)| {
+                let index = *at.get(key)?;
+                let place = (self.top() + heights.offset_of(index), height, margin);
+                (placed.insert(name.clone(), place) != Some(place)).then(|| name.clone())
+            })
+            .collect()
+    }
+
+    /// Brings the row whose key hashes to `key` to the top of the view, below the header and the arrival margin, then the view to the top of every scroll around it. `false` while the row is not among the rows or the views have not been laid out.
+    fn reveal_key_at_start(&self, key: u64) -> bool {
+        let Some(index) = self.keys.borrow().iter().position(|at| *at == key) else {
+            return false;
+        };
+        let top = self.top() + self.heights.borrow().offset_of(index) - self.header.get();
+        self.viewport.reveal_top_at_start(top).is_some()
+            && crate::page_anchor::reveal(self.viewport.area())
     }
 
     fn bring_into_view(&self, index: usize, margin: f32) {

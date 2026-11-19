@@ -200,6 +200,19 @@ let group = ReorderGroup::new(&session, move |slot| match line_at(slot) {
 .on_drop(move |carried, place| move_to(carried, &lines.get(), place));
 
 let page = LayoutScrollArea::new_with(LayoutStyle::column().flex_grow(1.0), move |viewport| {
+    let rows = VirtualRows::new(viewport, 48.0);
+    // Every heading is a place a link reaches, built or not.
+    rows.page_anchors(move || {
+        lines.with(|lines| {
+            lines
+                .iter()
+                .filter_map(|line| match line {
+                    Line::Heading(id) => Some((*line, section_anchor(*id))),
+                    Line::Sentence(_) => None,
+                })
+                .collect()
+        })
+    });
     let zone = group.virtual_zone(
         VirtualZoneProps::props()
             .items(lines)
@@ -207,7 +220,7 @@ let page = LayoutScrollArea::new_with(LayoutStyle::column().flex_grow(1.0), move
                 Line::Heading(id) => section_heading(id),
                 Line::Sentence(id) => sentence_row(id),
             }))
-            .rows(VirtualRows::new(viewport, 48.0))
+            .rows(rows)
             .build(),
     )?;
     title_then(zone)
@@ -231,14 +244,22 @@ screen across every section, and it is all a sectioned list needs:
 Every item is a drop target and a step of the keyboard whether it is built or not. An item carried out of the
 built window is still carried, and lands where it is let go: the group knows its own item by the press that
 picked it up, not by the box. Alt+↓ on the last item in view moves it one gap down and brings it into view, and
-focus follows it. Each built item says where it stands among all of them (`SetPosition`), so a reader counts the
+focus follows it by its key to wherever the caller's update put it: a heading whose sentences move with it, so
+that one step carries it further than the gap it was reported at, keeps the keyboard. (A `zone` counts its items
+by place, so there focus follows the item to the slot the step reported.) Each built item says where it stands among all of them (`SetPosition`), so a reader counts the
 whole list, not the screenful. `on_activate`, `label`, `on_detach`, `accepts`, `reach` and drops from other widgets
 of the session work as they do on a zone that builds everything.
 
 The zone may sit below anything else in its scroll, a title and its buttons included: the rows are counted from
 the list's own top in the content. Items are stacked as they come, so the space between two sentences belongs
 inside what `item` builds. The `rows` handle is the zone's own, and brings any item into view by its place
-(`rows.reveal(index, margin)`), built or not.
+(`rows.reveal(index, margin)`), built or not; the items that are places on the page, such as the headings, are its
+anchors (`rows.page_anchors`, see [Anchors on the rows of a long list](links.md#anchors-on-the-rows-of-a-long-list)),
+which a link or an address reaches whether they are built or not. Each item is a list item that keeps what it
+holds: a reader hears its words as it takes focus, and finds a heading inside it as a heading at its level and a
+sentence as text of its own (see [docs/accessibility.md](accessibility.md#the-desktop-tree)). Opening every section
+at once builds, places and measures the items that fill the view before the frame is drawn, so no item is shown
+or reached by Tab before it is placed.
 
 ## Scrolling near an edge
 

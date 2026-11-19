@@ -858,6 +858,18 @@ impl ScrollViewport {
         Some(target)
     }
 
+    /// [`reveal_at_start`](Self::reveal_at_start) down the view only, for a part of the content no node stands for that starts `top` px down it: a row a virtual list has not built. `None` before the viewport is laid out.
+    pub(crate) fn reveal_top_at_start(&self, top: f32) -> Option<f32> {
+        if self.rect.get().height <= 0.0 {
+            return None;
+        }
+        let margin = self.arrival.get();
+        let max_y = self.peek_ranges().map_or(f32::INFINITY, |(_, max_y)| max_y);
+        let y = (top - margin.top).clamp(0.0, max_y);
+        self.scroll_to(self.set_x.peek(), y);
+        Some(y)
+    }
+
     /// The furthest down the view can be scrolled, from the content as last laid out, or `None` before the content and the viewport have been.
     ///
     /// An offset set while the content was taller, such as one aimed at the end of a list whose unbuilt rows were guessed too tall, is past this until something clamps it.

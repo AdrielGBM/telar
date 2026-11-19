@@ -87,7 +87,7 @@ pub fn follow_pressed(destination: &Destination, modifiers: ModifiersState) -> b
 
 /// Makes `name` an anchor a link can reveal, until the returned registration drops. A later registration of the same name replaces an earlier one, and says so: two places answering to one name is a mistake a link cannot show.
 ///
-/// What `anchor:` registers for its box; `reveal` scrolls the box into place and reports whether it could.
+/// `reveal` scrolls the place into view and reports whether it could, which it cannot before the place is laid out. An address that named the anchor before it was registered is arrived at once the registration settles, and again on every [`AnchorRegistration::moved`], until the reader moves the page: what `anchor:` registers for its box, and what a list that builds only the rows on screen registers for each row it names ([`VirtualRows::page_anchors`](crate::VirtualRows::page_anchors)).
 #[must_use = "the anchor is withdrawn when the registration drops"]
 pub fn register_anchor(name: &str, reveal: impl Fn() -> bool + 'static) -> AnchorRegistration {
     install_revealer();
@@ -98,6 +98,8 @@ pub fn register_anchor(name: &str, reveal: impl Fn() -> bool + 'static) -> Ancho
     if replaced.is_some() {
         tracing::warn!("two boxes are anchors named \"{name}\"; a link to it reaches the last one");
     }
+    let arrived = name.clone();
+    reactive_core::after_settle(move || reveal_if_arriving(&arrived));
     AnchorRegistration { name, reveal }
 }
 
@@ -127,8 +129,8 @@ fn reveal_when_ready(name: &str) {
     reveal_anchor(name);
 }
 
-/// The anchor `name`'s box moved: revealed again if it is the one still being arrived at.
-pub(crate) fn anchor_moved(name: &str) {
+/// Reveals the anchor `name` if it is the one an address or a followed link is still arriving at.
+fn reveal_if_arriving(name: &str) {
     let arriving = PENDING.with(|pending| pending.borrow().as_deref() == Some(name));
     if arriving {
         reveal_anchor(name);
@@ -155,6 +157,13 @@ pub fn reader_moved() {
 pub struct AnchorRegistration {
     name: Arc<str>,
     reveal: Reveal,
+}
+
+impl AnchorRegistration {
+    /// The place this anchor names moved, or can be revealed now where it could not before: revealed again while it is the one being arrived at, so an arrival keeps up with a page that is still being laid out.
+    pub fn moved(&self) {
+        reveal_if_arriving(&self.name);
+    }
 }
 
 impl Drop for AnchorRegistration {

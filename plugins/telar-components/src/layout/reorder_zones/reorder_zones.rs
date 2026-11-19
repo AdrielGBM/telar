@@ -11,7 +11,7 @@ use telar::{
     StyledContainer, Transform, VirtualList, VirtualRows, after_settle, box_item, chord_pressed,
     effect,
     focus::{self, FocusId, Role, SetPosition},
-    on_cleanup, track_layout,
+    on_cleanup, track_layout, untrack,
 };
 
 use crate::shared::rows::RowKey;
@@ -85,11 +85,36 @@ struct FrozenZone {
 enum Extent {
     /// Every item is built, and stands where layout put its box.
     Built(Rc<RefCell<Vec<Option<RwSignal<Rect>>>>>),
-    /// Only the items the scroll shows are built, and every item stands where `rows` places it, across the box `list` the rows are laid out in.
+    /// Only the items the scroll shows are built, and every item stands where `rows` places it, across the box `list` the rows are laid out in; `keys` hashes the key of every item, in order.
     Rows {
         rows: VirtualRows,
         list: RwSignal<Rect>,
+        keys: Rc<dyn Fn() -> Vec<u64>>,
     },
+}
+
+impl Extent {
+    /// The key of the item at `index`, hashed, for a container whose items have keys of their own: `None` for one that counts its items by place.
+    fn key_at(&self, index: usize) -> Option<u64> {
+        match self {
+            Self::Built(_) => None,
+            Self::Rows { keys, .. } => keys().get(index).copied(),
+        }
+    }
+
+    /// Where the item whose key hashes to `key` stands now, in a container whose items have keys of their own.
+    fn position_of(&self, key: u64) -> Option<usize> {
+        match self {
+            Self::Built(_) => None,
+            Self::Rows { keys, .. } => keys().iter().position(|at| *at == key),
+        }
+    }
+}
+
+fn hashed<K: std::hash::Hash>(key: &K) -> u64 {
+    let mut hasher = std::hash::DefaultHasher::new();
+    key.hash(&mut hasher);
+    std::hash::Hasher::finish(&hasher)
 }
 
 struct Zone {
@@ -110,7 +135,7 @@ impl Zone {
                 .take(len)
                 .map(|slot| slot.as_ref().map(|rect| rect.peek()).unwrap_or_default())
                 .collect(),
-            Extent::Rows { rows, list } => {
+            Extent::Rows { rows, list, .. } => {
                 let list = list.get();
                 rows.spans()
                     .into_iter()
@@ -337,6 +362,10 @@ impl<P: Clone + 'static> ReorderGroup<P> {
             let items = items.clone();
             Reactive::of(move || items.get().len())
         };
+        let keys: Rc<dyn Fn() -> Vec<u64>> = {
+            let items = items.clone();
+            Rc::new(move || untrack(|| items.get()).iter().map(hashed).collect())
+        };
         let build = {
             let group = Rc::clone(&self.0);
             let count = count.clone();
@@ -371,6 +400,7 @@ impl<P: Clone + 'static> ReorderGroup<P> {
             Extent::Rows {
                 rows,
                 list: list_rect,
+                keys,
             },
             Lane {
                 count,
@@ -617,18 +647,46 @@ impl<P: Clone + 'static> Group<P> {
             .map(|(_, slot)| slot)
     }
 
+    fn zone(&self, zone: usize) -> Option<Rc<Zone>> {
+        self.zones
+            .borrow()
+            .iter()
+            .find(|(index, _)| *index == zone)
+            .map(|(_, zone)| Rc::clone(zone))
+    }
+
+    /// Gives focus to the item the keyboard stepped once the caller has moved it: wherever the caller's update put the item whose key hashes to `key`, which in a container of keyed items may be further than one slot from where it was, as when the items under a heading move with it; and at `landed`, where the step put it, for an item its container counts by place.
+    fn follow_step(self: &Rc<Self>, key: Option<u64>, landed: Slot) {
+        let group = Rc::downgrade(self);
+        after_settle(move || {
+            let Some(group) = group.upgrade() else {
+                return;
+            };
+            let slot = key
+                .and_then(|key| group.keyed(key, landed.zone))
+                .unwrap_or(landed);
+            group.focus_at(slot);
+        });
+    }
+
+    /// Where the item whose key hashes to `key` stands now among the containers of keyed items, looked for in container `first` before the others.
+    fn keyed(&self, key: u64, first: usize) -> Option<Slot> {
+        let mut zones = self.zones.borrow().clone();
+        zones.sort_by_key(|(index, _)| *index != first);
+        zones.iter().find_map(|(index, zone)| {
+            zone.extent
+                .position_of(key)
+                .map(|at| Slot::new(*index, at))
+        })
+    }
+
     /// Gives focus to the item that stands at `slot`, once the move that put something there has been built.
     /// In a container that builds only what its scroll shows, the item is brought into view first, so that it is built to be given focus.
     fn focus_at(self: &Rc<Self>, slot: Slot) {
-        let rows = self
-            .zones
-            .borrow()
-            .iter()
-            .find(|(index, _)| *index == slot.zone)
-            .and_then(|(_, zone)| match &zone.extent {
-                Extent::Rows { rows, .. } => Some(rows.clone()),
-                Extent::Built(_) => None,
-            });
+        let rows = self.zone(slot.zone).and_then(|zone| match &zone.extent {
+            Extent::Rows { rows, .. } => Some(rows.clone()),
+            Extent::Built(_) => None,
+        });
         if let Some(rows) = rows {
             rows.reveal(slot.index, 0.0);
         }
@@ -725,12 +783,15 @@ impl<P: Clone + 'static> Group<P> {
             return false;
         };
         if let Some(to) = self.stepped(slot, by, &payload) {
+            let key = self
+                .zone(slot.zone)
+                .and_then(|zone| zone.extent.key_at(slot.index));
             self.report(Some(slot), payload, DropPlace::Between(to));
             let landed = match to.zone == slot.zone && to.index > slot.index {
                 true => Slot::new(to.zone, to.index - 1),
                 false => to,
             };
-            self.focus_at(landed);
+            self.follow_step(key, landed);
         }
         true
     }

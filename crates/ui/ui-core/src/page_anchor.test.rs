@@ -91,14 +91,24 @@ fn a_renamed_anchor_takes_the_address_and_the_arrival_with_it() {
     reset_layout_runtime();
     receive_location_history(vec![at("/"), at("/#simulacion")]);
     let name = signal(String::from("simulacion"));
-    let page = page_with(move || name.get());
+    let above = block(1000.0);
+    let above_node = above.layout_node();
+    let column = Container::column(vec![
+        box_item(above),
+        box_item(block(100.0).page_anchor(move || name.get())),
+        box_item(block(1000.0)),
+    ])
+    .unwrap();
+    let mut page = ScrollPage::new(Box::new(column)).unwrap();
+    page.relayout(400.0, 300.0);
     name.set("simulation".into());
     assert_eq!(location_history(), [at("/"), at("/#simulation")]);
-    page.viewport().scroll_to(0.0, 0.0);
-    crate::link::anchor_moved("simulation");
+    crate::context::set_layout_style(above_node, LayoutStyle::new().width(400.0).height(1200.0))
+        .unwrap();
+    page.relayout(400.0, 300.0);
     assert_eq!(
         offset(&page),
-        (0.0, 1000.0),
+        (0.0, 1200.0),
         "the arrival keeps pulling the page toward the anchor under its new name"
     );
 }
@@ -125,4 +135,23 @@ fn an_anchor_near_the_end_of_a_short_page_leaves_the_view_at_the_end() {
         furthest,
         "the page is not scrolled past its end"
     );
+}
+
+/// An anchor registered after the address named it, as a place built later registers it, is arrived at once registered, and again each time its place moves, until the reader moves the page.
+#[test]
+fn an_anchor_registered_after_the_address_named_it_is_arrived_at() {
+    reset_layout_runtime();
+    receive_location_history(vec![at("/#late")]);
+    let revealed = std::rc::Rc::new(std::cell::Cell::new(0));
+    let sink = revealed.clone();
+    let registration = crate::link::register_anchor("late", move || {
+        sink.set(sink.get() + 1);
+        true
+    });
+    assert_eq!(revealed.get(), 1, "revealed once registered");
+    registration.moved();
+    assert_eq!(revealed.get(), 2, "and again when its place moves");
+    reader_moved();
+    registration.moved();
+    assert_eq!(revealed.get(), 2, "until the reader moves the page");
 }

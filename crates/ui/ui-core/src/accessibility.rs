@@ -128,7 +128,10 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
                     .get(&e.node)
                     .map(|link| Role::Link(link.clone()))
                     .unwrap_or_else(|| e.role.clone()),
-                name: label.map(str::to_string).unwrap_or_default(),
+                name: label
+                    .or_else(|| reading.words_of.get(&e.node).map(String::as_str))
+                    .map(str::to_string)
+                    .unwrap_or_default(),
                 rect: hit_rect(e.node).unwrap_or(*rect),
                 focused: focused == Some(e.id),
                 enabled: e.enabled,
@@ -392,9 +395,47 @@ fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
     }
 }
 
-/// Whether a control holds the text it draws as content read inside it, rather than being named by it: a scroll area that is a stop and was given a name, which says what it scrolls without saying it all, and a tab panel, which its tab names.
+/// How the innermost control around something drawn reads it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Drawn {
+    /// It is inside no control.
+    #[default]
+    Free,
+    /// The control is named by it and it is read as nothing else, as a button is by its label.
+    Names,
+    /// The control holds it as content read inside it, a heading still a heading and each run of text a node of its own, and is named by its words too unless the application named it: an item of a list a person moves through, whose words are what a reader hears as it takes focus.
+    NamesAndHolds,
+    /// The control holds it as content read inside it and is not named by it: a structure a person operates (a list box, a tree, a grid, a menu, a toolbar) would otherwise be called by everything it shows, a tab panel is named by its tab, and a scroll area that is a stop and was given a name says what it scrolls without saying it all.
+    Holds,
+}
+
+impl Drawn {
+    fn inside(role: &Role, named: bool) -> Self {
+        match role {
+            Role::ListItem => Self::NamesAndHolds,
+            Role::List
+            | Role::ListBox
+            | Role::Tree
+            | Role::Grid
+            | Role::Menu
+            | Role::Toolbar
+            | Role::TabList
+            | Role::RadioGroup
+            | Role::Dialog
+            | Role::TabPanel => Self::Holds,
+            Role::ScrollArea if named => Self::Holds,
+            _ => Self::Names,
+        }
+    }
+
+    fn holds(self) -> bool {
+        matches!(self, Self::NamesAndHolds | Self::Holds)
+    }
+}
+
+/// Whether a control holds the text it draws as content read inside it, rather than only being named by it: see [`Drawn`].
 fn holds_what_it_draws(role: &Role, named: bool) -> bool {
-    *role == Role::TabPanel || (named && *role == Role::ScrollArea)
+    Drawn::inside(role, named).holds()
 }
 
 /// Whether a node read for a box holds the nodes read inside that box. Text, and a picture, are read as what they say; a box named as a group reads as its name, a caption beside what it groups.
@@ -897,6 +938,8 @@ struct Open {
     /// The box named by its content that the element sits in with no named box between, by its place in [`Reading::titled`].
     titled: Option<usize>,
     control: Option<NodeId>,
+    /// How the innermost control around the element reads what it draws.
+    drawn: Drawn,
     node: Option<NodeId>,
     /// Whether a named box around the element is read in place of what it draws, with no control between them: see [`Role::name_replaces_content`].
     replaced: bool,
@@ -920,6 +963,8 @@ struct Reading {
     artwork: Vec<SeenArt>,
     /// Where in the frame each control's box began.
     controls_opened: FxHashMap<NodeId, usize>,
+    /// The words drawn inside each control named by what it holds, outside every control inside it, in draw order: see [`Drawn::NamesAndHolds`].
+    words_of: FxHashMap<NodeId, String>,
     /// The link each link box is.
     links: FxHashMap<NodeId, Link>,
     /// The element each element is drawn inside, where it is drawn inside one.
@@ -965,6 +1010,7 @@ impl Reading {
                 named,
                 titled,
                 control,
+                drawn,
                 node: innermost,
                 replaced,
                 shift: outer_shift,
@@ -1007,7 +1053,15 @@ impl Reading {
                             || (annotation.label.is_some()
                                 && !inner.hidden
                                 && role.name_replaces_content()));
-                    let mut inner_titled = titled;
+                    let is_control = controls.contains(&node);
+                    let inner_drawn = match is_control {
+                        true => Drawn::inside(&role, annotation.label.is_some()),
+                        false => drawn,
+                    };
+                    let mut inner_titled = match is_control && inner_drawn.holds() {
+                        true => None,
+                        false => titled,
+                    };
                     let position = element
                         .semantics
                         .position
@@ -1098,11 +1152,8 @@ impl Reading {
                         scope: inner,
                         named,
                         titled: inner_titled,
-                        control: if controls.contains(&node) {
-                            Some(node)
-                        } else {
-                            control
-                        },
+                        control: if is_control { Some(node) } else { control },
+                        drawn: inner_drawn,
                         node: Some(node),
                         replaced: inner_replaced,
                         shift,
@@ -1149,7 +1200,7 @@ impl Reading {
                     if replaced && !links {
                         return;
                     }
-                    if !in_control && clipped_away.last().copied().unwrap_or(false) {
+                    if drawn != Drawn::Names && clipped_away.last().copied().unwrap_or(false) {
                         return;
                     }
                     // A reading set above its base is read after it, so a reader hears both, as a target with no room above a base writes them.
@@ -1157,7 +1208,10 @@ impl Reading {
                         .with_readings_inline()
                         .text
                         .into_owned();
-                    match titled.filter(|_| !in_control) {
+                    if let (Drawn::NamesAndHolds, Some(control)) = (drawn, control) {
+                        append(reading.words_of.entry(control).or_default(), &read);
+                    }
+                    match titled.filter(|_| drawn != Drawn::Names) {
                         Some(title) => reading.titled[title].words.push((at, read)),
                         None => reading.text.push(Piece {
                             text: read,

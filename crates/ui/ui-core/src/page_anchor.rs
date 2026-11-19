@@ -9,7 +9,7 @@ use layout_core::NodeId;
 use crate::anchor_line::{PlaceRegistration, name_place};
 use crate::context::track_layout;
 use crate::layout_item::LayoutItem;
-use crate::link::{AnchorRegistration, anchor_moved, anchor_renamed, register_anchor};
+use crate::link::{AnchorRegistration, anchor_renamed, register_anchor};
 use crate::scroll_viewports::scroll_viewports_of;
 
 /// Names a box as a place on the page, for [`anchor`](platform_core::anchor) links to reach. Every widget with a layout node takes it.
@@ -26,7 +26,6 @@ pub trait PageAnchor: LayoutItem + Sized {
         let place: Rc<RefCell<Option<PlaceRegistration>>> = Rc::default();
         let annotation = crate::annotation::slot(node);
         {
-            let current = current.clone();
             let registration = registration.clone();
             let place = place.clone();
             reactive_core::effect(move || {
@@ -47,15 +46,17 @@ pub trait PageAnchor: LayoutItem + Sized {
                 }
             });
         }
-        reactive_core::effect(move || {
-            if let Some(rect) = track_layout(node) {
-                rect.get();
-            }
-            let name = current.borrow().clone();
-            if let Some(name) = name {
-                anchor_moved(&name);
-            }
-        });
+        {
+            let registration = registration.clone();
+            reactive_core::effect(move || {
+                if let Some(rect) = track_layout(node) {
+                    rect.get();
+                }
+                if let Some(registration) = registration.borrow().as_ref() {
+                    registration.moved();
+                }
+            });
+        }
         reactive_core::on_cleanup(move || {
             drop(registration.borrow_mut().take());
             drop(place.borrow_mut().take());
@@ -67,7 +68,7 @@ pub trait PageAnchor: LayoutItem + Sized {
 impl<T: LayoutItem> PageAnchor for T {}
 
 /// Brings `node` to the top of the innermost scroll it sits in, then that scroll to the top of the next one out. `false` while any of them has not been laid out.
-fn reveal(node: NodeId) -> bool {
+pub(crate) fn reveal(node: NodeId) -> bool {
     let mut item = node;
     for viewport in scroll_viewports_of(node) {
         if viewport.reveal_at_start(item).is_none() {

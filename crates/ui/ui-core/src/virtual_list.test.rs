@@ -78,12 +78,17 @@ mod measured {
         }
 
         fn under_header(items: Vec<Item>, estimate: f32, overscan: f32, header: f32) -> Self {
-            Self::mount(items, estimate, overscan, header, true)
+            Self::mount(items, estimate, overscan, header, true, false)
         }
 
         /// The list drawn below a block `above` px tall that scrolls away with it.
         fn below(items: Vec<Item>, estimate: f32, above: f32) -> Self {
-            Self::mount(items, estimate, 0.0, above, false)
+            Self::mount(items, estimate, 0.0, above, false, false)
+        }
+
+        /// The list with every hundredth row the anchor `row-<its key>`.
+        fn anchored(items: Vec<Item>, estimate: f32) -> Self {
+            Self::mount(items, estimate, 0.0, 0.0, true, true)
         }
 
         fn mount(
@@ -92,6 +97,7 @@ mod measured {
             overscan: f32,
             header: f32,
             sticky: bool,
+            anchored: bool,
         ) -> Self {
             reset_layout_runtime();
             set_surface_size(geometry_core::Size::new(WIDTH, VIEW));
@@ -112,6 +118,17 @@ mod measured {
                             false => rows,
                         };
                         handed = Some((viewport, rows.clone()));
+                        if anchored {
+                            rows.page_anchors(move || {
+                                items.with(|items| {
+                                    items
+                                        .iter()
+                                        .filter(|(key, _)| key % 100 == 0)
+                                        .map(|(key, _)| (*key, format!("row-{key}")))
+                                        .collect()
+                                })
+                            });
+                        }
                         let list = VirtualList::measured(
                             LayoutStyle::new().flex_column(),
                             rows,
@@ -587,6 +604,60 @@ mod measured {
             anchor > 30_000,
             "the view is deep in the list, at row {anchor}"
         );
+    }
+
+    fn at(path: &str) -> platform_core::Location {
+        platform_core::LocationFormat::root().parse(path).unwrap()
+    }
+
+    #[test]
+    fn an_address_naming_a_row_never_built_arrives_at_it_and_stays_while_the_rows_above_are_measured()
+     {
+        platform_core::receive_location_history(vec![at("/#row-500")]);
+        let list = Mounted::anchored(numbered(taller_after(300, 30.0, 20.0)), 20.0);
+        assert!(crate::link::has_anchor("row-500"));
+        assert!(
+            list.built().contains(&500),
+            "the row the address names is built: {:?}",
+            list.built()
+        );
+        assert_eq!(list.rows.row_at(list.offset()), 500);
+        assert_eq!(
+            list.on_screen(500),
+            0.0,
+            "it starts the view though the rows above it were guessed shorter than they are"
+        );
+    }
+
+    #[test]
+    fn a_link_to_a_row_anchor_brings_the_row_to_the_top_and_the_reader_moving_ends_the_arrival() {
+        platform_core::receive_location_history(vec![at("/")]);
+        let list = Mounted::anchored(numbered(std::iter::repeat_n(20.0, 1000)), 20.0);
+        assert!(crate::link::follow(&platform_core::anchor("row-700")));
+        list.settle();
+        assert_eq!(list.on_screen(700), 0.0);
+        assert_eq!(
+            platform_core::location_history(),
+            [at("/"), at("/#row-700")]
+        );
+
+        crate::link::reader_moved();
+        list.scroll_to(100.0);
+        list.items
+            .update(|items| items.iter_mut().for_each(|(_, height)| *height = 24.0));
+        list.settle();
+        assert_eq!(list.offset(), 100.0, "the reader's place is theirs");
+    }
+
+    #[test]
+    fn a_row_anchor_leaves_with_its_row() {
+        platform_core::receive_location_history(vec![at("/")]);
+        let list = Mounted::anchored(numbered(std::iter::repeat_n(20.0, 1000)), 20.0);
+        assert!(crate::link::has_anchor("row-900"));
+        list.items.update(|items| items.truncate(800));
+        list.settle();
+        assert!(!crate::link::has_anchor("row-900"));
+        assert!(crate::link::has_anchor("row-700"));
     }
 }
 

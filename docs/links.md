@@ -81,8 +81,8 @@ on a surface whose app allows it.
 | `address_of` | A destination as the text a target writes where an address goes: a route in the app's `location_format()` and in the locale its address carries (`/en/projects`), an anchor as the current location with that fragment, an external URI as itself. |
 | `follow`, `follow_beside`, `follow_pressed` | Going there from app code: push the route, reveal the anchor, open the URI. `follow_pressed` reads Ctrl, Cmd or Shift as a request for a view beside this one. |
 | `open_uri`, `UriOpener`, `set_uri_opener` | The `services-core` service that hands a `&Uri` to the system once the `UriSchemes` it is given allow it. Every runner installs its platform's; headless installs none, and a test installs its own. |
-| `anchor:`, `PageAnchor::page_anchor` | Names a box as a place on the page; see [Anchors](#anchors). |
-| `register_anchor`, `reveal_anchor`, `has_anchor` | The lookup an anchor resolves through, which `anchor:` fills. |
+| `anchor:`, `PageAnchor::page_anchor` on a box, `VirtualRows::page_anchors` on the rows of a long list | Names a place on the page; see [Anchors](#anchors). |
+| `register_anchor`, `AnchorRegistration::moved`, `reveal_anchor`, `has_anchor` | The lookup an anchor resolves through, which both fill: a registration made after the address named it is still arrived at, and `moved` keeps an arrival up with its place. |
 | `Event::BoxActivated` | A surface that follows links itself reporting a plain activation back to the app. |
 
 A link is a control: it joins the tab order with the `link` role, follows on a tap and on **Enter** (not Space,
@@ -125,8 +125,38 @@ history keeps the anchor entries around it (see [docs/location.md](location.md))
 
 | Target | An anchor is |
 | --- | --- |
-| Web, document | The element's `id`, so `#name` is a native fragment. A plain click on its `<a>` is taken back and followed by Telar, which pushes the entry and reveals the box through the document's scroll. |
+| Web, document | The element's `id`, so `#name` is a native fragment. A plain click on its `<a>` is taken back and followed by Telar, which pushes the entry and reveals the box through the document's scroll. A [row anchor](#anchors-on-the-rows-of-a-long-list) is no element's `id`, since its row may not be built: the browser's own fragment scrolling does not find it, and Telar reveals it on arrival and when its link is followed, as on every other target. |
 | Web, canvas, desktop, Android, terminal, headless | Revealed by Telar in its scroll areas. A desktop or terminal `--location /page#name` and an Android link with a fragment open there. |
+
+### Anchors on the rows of a long list
+
+A list that builds only the rows on screen cannot put `anchor:` on a row it has not built, so its rows are
+anchors of its `VirtualRows` handle instead, named by the key the list gives each row (its index, in a list keyed
+by place):
+
+```rust
+let rows = VirtualRows::new(viewport, 48.0);
+rows.page_anchors(move || {
+    lines.with(|lines| {
+        lines
+            .iter()
+            .filter_map(|line| line.section().map(|id| (line.clone(), section_anchor(id))))
+            .collect()
+    })
+});
+```
+
+Each row it names answers to its anchor whether it is built or not, and is followed and arrived at as a box is: a
+link or an address naming it brings the row to the top of the view, below a header held over the rows and the
+arrival margin, then the view to the top of every scroll around it, and keeps it there while the rows around it
+are measured, until the reader presses, scrolls or types. The names are read again when what they read changes,
+so a row that leaves the list takes its anchor with it. Call it where the list is built: the anchors are withdrawn
+with the owner that made them. `use_anchor_at` reads the boxes that are places, so a list says which of its rows is
+under a line from its own handle (`rows.row_at(offset)`), built or not.
+
+Every anchor is a `register_anchor` registration underneath: one made after the address named it is arrived at
+once it settles, and `AnchorRegistration::moved` reveals it again while the arrival lasts, which is what `anchor:`
+calls when its box moves and the rows' anchors call when a row is measured.
 
 ## The current link
 

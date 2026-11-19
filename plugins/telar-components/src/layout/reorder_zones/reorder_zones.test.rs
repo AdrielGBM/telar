@@ -685,6 +685,25 @@ fn virtual_board() -> VirtualBoard {
             }
         }
     });
+    let (tree, viewport) = mount_virtual(&group, Reactive::of(move || items.get()), &built, |_| ROW);
+    let board = VirtualBoard {
+        tree,
+        items,
+        built,
+        drops,
+        viewport,
+    };
+    board.settle();
+    board
+}
+
+/// A block `ABOVE` px tall over a virtual zone of `group` holding `items`, each a pill as tall as `height` says, in a scroll `VIEW` px tall; `built` counts the items built.
+fn mount_virtual(
+    group: &ReorderGroup<u32>,
+    items: Reactive<Vec<u32>>,
+    built: &Rc<std::cell::Cell<usize>>,
+    height: fn(u32) -> f32,
+) -> (ComponentList, ScrollViewport) {
     let mut handed = None;
     let counted = built.clone();
     let scroll =
@@ -701,9 +720,13 @@ fn virtual_board() -> VirtualBoard {
             let zone = group.virtual_zone(
                 VirtualZoneProps::props()
                     .items(items)
-                    .item(Rc::new(move |_, _| {
+                    .item(Rc::new(move |_, key| {
                         counted.set(counted.get() + 1);
-                        pill()
+                        Ok(box_item(StyledContainer::new(
+                            LayoutStyle::new().width(ITEM).height(height(key)),
+                            |_| RectStyle::default(),
+                            vec![],
+                        )?))
                     }))
                     .rows(VirtualRows::new(viewport, ROW))
                     .build(),
@@ -722,15 +745,7 @@ fn virtual_board() -> VirtualBoard {
     let node = column.layout_node();
     let tree = ComponentList::new(box_item(column));
     lay_out(node, 400.0, VIEW + 100.0);
-    let board = VirtualBoard {
-        tree,
-        items,
-        built,
-        drops,
-        viewport: handed.expect("the content was built"),
-    };
-    board.settle();
-    board
+    (tree, handed.expect("the content was built"))
 }
 
 impl VirtualBoard {
@@ -869,4 +884,160 @@ fn an_item_with_no_payload_stays_where_it_is() {
     board.step(NamedKey::ArrowDown);
     assert!(board.drops.borrow().is_empty());
     assert_eq!(board.items.peek()[10], 10);
+}
+
+
+/// The items the heading at `at` stands over: itself and every item up to the next heading.
+fn block_of(items: &[u32], at: usize) -> std::ops::Range<usize> {
+    let end = items[at + 1..]
+        .iter()
+        .position(|key| heads(*key))
+        .map_or(items.len(), |next| at + 1 + next);
+    at..end
+}
+
+/// A board whose headings are carried too, each moving with the items under it: a heading goes only where another starts or the list ends.
+fn sectioned_board() -> VirtualBoard {
+    fresh_layout_runtime();
+    telar::focus::clear();
+    telar::set_surface_size(telar::Size::new(400.0, VIEW + 100.0));
+    let items = signal((0..MANY as u32).collect::<Vec<u32>>());
+    let drops: KeyedDrops = Rc::default();
+    let recorded = drops.clone();
+    let group = ReorderGroup::new(&DragSession::new(), move |slot: Slot| {
+        items.with(|items| items.get(slot.index).copied())
+    })
+    .accepts(move |key, place| match place {
+        DropPlace::Between(to) if heads(*key) => items.with(|items| {
+            let starts = items.get(to.index).is_none_or(|next| heads(*next));
+            let own = items
+                .iter()
+                .position(|at| at == key)
+                .map(|from| block_of(items, from));
+            starts && own.is_some_and(|own| !(own.start..=own.end).contains(&to.index))
+        }),
+        DropPlace::Between(_) => true,
+        DropPlace::Inside(_) => false,
+    })
+    .on_drop(move |key, place| {
+        recorded.borrow_mut().push((key, place));
+        let DropPlace::Between(to) = place else {
+            return;
+        };
+        let mut now = items.peek();
+        let Some(from) = now.iter().position(|at| *at == key) else {
+            return;
+        };
+        let block = match heads(key) {
+            true => block_of(&now, from),
+            false => from..from + 1,
+        };
+        let carried: Vec<u32> = now.drain(block.clone()).collect();
+        let at = match to.index > block.start {
+            true => to.index - block.len(),
+            false => to.index,
+        };
+        now.splice(at..at, carried);
+        items.set(now);
+    });
+    let built = Rc::default();
+    let (tree, viewport) = mount_virtual(&group, Reactive::of(move || items.get()), &built, |_| ROW);
+    let board = VirtualBoard {
+        tree,
+        items,
+        built,
+        drops,
+        viewport,
+    };
+    board.settle();
+    board
+}
+
+#[test]
+fn alt_down_on_a_heading_whose_items_move_with_it_keeps_the_heading_focused() {
+    let mut board = sectioned_board();
+    let heading = board.drawn(0).expect("the first heading is built");
+    let (x, y) = telar::testing::centre(heading);
+    board.event(press(x, y));
+    board.event(release(x, y));
+
+    board.step(NamedKey::ArrowDown);
+
+    let at = board
+        .items
+        .peek()
+        .iter()
+        .position(|key| *key == 0)
+        .expect("the heading is still there");
+    assert_eq!(
+        at, 10,
+        "the heading and its nine items moved past the next section"
+    );
+    let focused = board
+        .items_read()
+        .into_iter()
+        .find(|node| node.focused)
+        .expect("an item kept the keyboard");
+    assert_eq!(
+        focused.position.map(|place| place.position.get() as usize),
+        Some(at + 1),
+        "the heading keeps the keyboard where the move left it, not the item one gap before the drop"
+    );
+}
+
+#[test]
+fn unfolding_every_section_lays_out_every_item_it_builds_in_one_pass() {
+    fresh_layout_runtime();
+    telar::focus::clear();
+    telar::set_surface_size(telar::Size::new(400.0, VIEW + 100.0));
+    let folded = signal(true);
+    let items = telar::memo(move || {
+        (0..MANY as u32)
+            .filter(|key| !folded.get() || heads(*key))
+            .collect::<Vec<u32>>()
+    });
+    let group = ReorderGroup::new(&DragSession::new(), move |slot: Slot| {
+        items.with(|items| items.get(slot.index).copied())
+    });
+    let built = Rc::default();
+    let (tree, _) = mount_virtual(
+        &group,
+        Reactive::of(move || items.get()),
+        &built,
+        |key| match heads(key) {
+            true => 60.0,
+            false => 23.0,
+        },
+    );
+    telar::relayout_if_dirty();
+
+    folded.set(false);
+    telar::relayout_if_dirty();
+
+    let read = |tree: &ComponentList| -> Vec<telar::AccessNode> {
+        telar::inspect::snapshot(&tree.commands())
+            .into_iter()
+            .filter(|node| node.role == Role::ListItem)
+            .collect()
+    };
+    let once = read(&tree);
+    assert!(
+        once.iter()
+            .all(|node| node.rect.width >= 1.0 && node.rect.height >= 1.0),
+        "every item built is laid out: {:?}",
+        once.iter().map(|node| node.rect).collect::<Vec<_>>()
+    );
+    let audit = telar::inspect::audit(&tree.commands(), None);
+    let hidden: Vec<_> = audit
+        .violations
+        .iter()
+        .filter(|violation| violation.rule == telar::AccessRule::HiddenFocusable)
+        .collect();
+    assert!(hidden.is_empty(), "{hidden:?}");
+    telar::relayout_if_dirty();
+    assert_eq!(
+        read(&tree).len(),
+        once.len(),
+        "a second pass finds nothing more to build"
+    );
 }

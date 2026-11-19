@@ -1604,3 +1604,45 @@ fn restating_a_layout_lays_out_nothing_anew() {
     relayout_if_dirty();
     assert_eq!(layout_passes(), passes + 2, "and children that moved");
 }
+
+/// A pass whose rects make something add to the tree, as a list that builds only the rows on screen fills the room its measured rows left, is laid out again before the relayout returns: what was added has its place, and the growth stops where the room does.
+#[test]
+fn what_a_pass_adds_to_the_tree_is_placed_before_the_relayout_returns() {
+    reset_layout_runtime();
+    let (first, first_rect) = new_leaf(LayoutStyle::new().height(20.0)).unwrap();
+    let list = new_container(LayoutStyle::new().flex_column(), &[first]).unwrap();
+    let root = new_container(LayoutStyle::new().width(100.0).height(100.0), &[list]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let rows: Rc<std::cell::RefCell<Vec<(NodeId, RwSignal<Rect>)>>> =
+        Rc::new(std::cell::RefCell::new(vec![(first, first_rect)]));
+    let filled = Rc::clone(&rows);
+    let list_rect = track_layout(list).unwrap();
+    reactive_core::effect(move || {
+        let bottom = {
+            let rect = list_rect.get();
+            rect.y + rect.height
+        };
+        let last = filled.borrow().last().map(|(_, rect)| rect.get());
+        if bottom < 100.0 && last.is_some_and(|rect| rect.height > 0.0) {
+            let (row, rect) = new_leaf(LayoutStyle::new().height(20.0)).unwrap();
+            filled.borrow_mut().push((row, rect));
+            let children: Vec<NodeId> = filled.borrow().iter().map(|(node, _)| *node).collect();
+            set_children(list, &children).unwrap();
+        }
+    });
+
+    relayout_if_dirty();
+
+    let rows = rows.borrow();
+    assert_eq!(rows.len(), 5, "five 20px rows fill the 100px list");
+    assert!(
+        rows.iter().all(|(_, rect)| rect.peek().height == 20.0),
+        "every row added is placed: {:?}",
+        rows.iter().map(|(_, rect)| rect.peek()).collect::<Vec<_>>()
+    );
+}

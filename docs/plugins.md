@@ -167,6 +167,15 @@ rows their spacing inside the row rather than as a `gap`, so that measuring coun
 the top of the scroll, a table's column headings, are `VirtualRows::new(viewport, estimate).under_header(height)`:
 their places count the header, and a row brought into view stops below it rather than behind it.
 
+Measuring the rows a pass built can leave room for more, so a pass that fills a view, as opening every section of
+a long text does, builds and measures them all before the frame is drawn: `relayout_if_dirty` lays the tree out
+again while a pass leaves it dirty, a bounded number of times, so the frame shows no row, and Tab reaches none,
+that was built but not yet placed. A row a link should reach whether it is built or not is an anchor of the handle rather than of its
+box, which may not exist: `rows.page_anchors(|| vec![(key, name), …])` names, by the key the list gives each row
+(its index in a loop without a `key`), the rows that are places on the page, and a link to one, or an address
+that names one, brings it to the top of the view as [`anchor:`](links.md#anchors) does a box.
+
+
 ### `@class` and `SurfaceStyle`
 
 `@class` on a component call restyles the component's **principal surface**, the one a caller means when they

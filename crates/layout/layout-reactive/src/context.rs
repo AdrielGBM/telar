@@ -294,16 +294,17 @@ fn publish(updates: Vec<Update>) {
     });
 }
 
-/// Re-lays out every root that has been computed at least once, picking up any nodes a reactive change dirtied since the last frame. Each `compute_layout` early-returns when its root is clean and the space is unchanged, so this is cheap on a still frame. The runtime calls it once per redraw (after flushing reactive effects, before rendering) so a data change deep in the tree — e.g. a reactive list adding an item — is reflected in layout without the app shell knowing about it. Node dirtiness propagates up to the root through taffy, so a dirtied list container makes its root recompute.
-///
-/// A root that stands against the surface (see [`lay_out_against_surface`]) is laid out here at the surface's current size, from the first frame on, whether or not anything computed it before.
-pub fn relayout_if_dirty() {
+/// How many times one [`relayout_if_dirty`] lays the tree out while each pass leaves it dirty again: room for a list to measure what it built and fill what that left room for, and a bound on a tree whose every pass changes it.
+const PASSES_PER_RELAYOUT: usize = 8;
+
+/// Every root laid out before, at the space it was laid out in, and every root standing against the surface, at the surface's size.
+fn roots_to_lay_out() -> Vec<(NodeId, AvailableSpace, AvailableSpace)> {
     let surface = crate::surface_size::surface_size();
     let surface_space = (
         AvailableSpace::Definite(surface.width),
         AvailableSpace::Definite(surface.height),
     );
-    let roots: Vec<(NodeId, AvailableSpace, AvailableSpace)> = with_runtime(|rt| {
+    with_runtime_ref(|rt| {
         rt.last_space
             .iter()
             .filter(|(node, _)| !rt.surface_roots.contains(*node))
@@ -314,9 +315,29 @@ pub fn relayout_if_dirty() {
                     .map(|&n| (n, surface_space.0, surface_space.1)),
             )
             .collect()
-    });
-    for (root, width, height) in roots {
-        let _ = compute_layout(root, width, height);
+    })
+}
+
+/// Re-lays out every root that has been computed at least once, picking up any nodes a reactive change dirtied since the last frame. Each `compute_layout` early-returns when its root is clean and the space is unchanged, so this is cheap on a still frame. The runtime calls it once per redraw (after flushing reactive effects, before rendering) so a data change deep in the tree — e.g. a reactive list adding an item — is reflected in layout without the app shell knowing about it. Node dirtiness propagates up to the root through taffy, so a dirtied list container makes its root recompute.
+///
+/// What a pass publishes can change the tree again — a list that builds only the rows on screen measures them and builds the rows they leave room for — so the roots are laid out again until a pass leaves none of them dirty, a bounded number of times: the frame drawn after it shows no box that was built but never placed.
+///
+/// A root that stands against the surface (see [`lay_out_against_surface`]) is laid out here at the surface's current size, from the first frame on, whether or not anything computed it before.
+pub fn relayout_if_dirty() {
+    for pass in 0..PASSES_PER_RELAYOUT {
+        let roots = roots_to_lay_out();
+        let due = pass == 0
+            || with_runtime_ref(|rt| {
+                roots.iter().any(|(root, width, height)| {
+                    rt.engine.is_dirty(*root) || rt.last_space.get(root) != Some(&(*width, *height))
+                })
+            });
+        if !due {
+            break;
+        }
+        for (root, width, height) in roots {
+            let _ = compute_layout(root, width, height);
+        }
     }
     let hooks: Vec<Rc<dyn Fn()>> = with_runtime_ref(|rt| {
         rt.relayout_hooks
