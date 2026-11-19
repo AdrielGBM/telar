@@ -223,8 +223,8 @@ fn tree() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let tree = tree_view(
         TreeViewProps::props()
             .items(items)
-            .expanded(telar::signal(["inputs".into()].into_iter().collect()))
-            .selected(telar::signal(Some("button".into())))
+            .expanded(telar::signal(["inputs"].into_iter().collect()))
+            .selected(telar::signal(Some("button")))
             .label("Components")
             .build(),
     )?;
@@ -1312,20 +1312,20 @@ fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
         CellAlign, Column, DataTableProps, ListRow, SelectionMode, TableRow, VirtualListProps,
         data_table, virtual_list,
     };
-    let rows: Vec<ListRow> = (0..40)
+    let rows: Vec<ListRow<String>> = (0..40)
         .map(|i| ListRow::new(format!("c{i}"), format!("Contact {i}")).disabled(i == 3))
         .collect();
     let list = virtual_list(
         VirtualListProps::props()
             .items(rows)
             .selection_mode(SelectionMode::Multiple)
-            .selected_rows(telar::signal(std::collections::BTreeSet::from([
-                "c1".into()
+            .selected_rows(telar::signal(std::collections::HashSet::from([
+                "c1".to_string()
             ])))
             .label("Contacts")
             .build(),
     )?;
-    let files: Vec<TableRow> = (0..40)
+    let files: Vec<TableRow<String>> = (0..40)
         .map(|i| {
             TableRow::new(
                 format!("f{i}"),
@@ -1344,12 +1344,12 @@ fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
                     .resizable(true),
             ])
             .rows(files)
-            .selected(telar::signal(Some("f2".into())))
+            .selected(telar::signal(Some("f2".to_string())))
             .label("Files")
             .build(),
     )?;
     let downloads = data_table(
-        DataTableProps::props()
+        DataTableProps::<String>::props()
             .columns(vec![Column::new("name", "Name")])
             .label("Downloads")
             .build(),
