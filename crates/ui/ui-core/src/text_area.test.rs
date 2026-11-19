@@ -1089,3 +1089,30 @@ fn only_an_area_that_indents_keeps_tab_from_the_host() {
     assert!(keeps_tab(&form_indenting.area));
     focus::clear();
 }
+
+/// The hook hears the lines as they came, and an area keeps what it answers with them.
+#[test]
+fn an_area_hands_a_paste_of_several_lines_to_the_hook_whole() {
+    let (area, value) = focused("");
+    let heard = Rc::new(RefCell::new(String::new()));
+    let hearing = Rc::clone(&heard);
+    let mut area = area.on_paste(move |text| {
+        *hearing.borrow_mut() = text.to_string();
+        PasteAnswer::Insert(text.replace("# ", ""))
+    });
+    area.on_event(&Event::Paste {
+        text: "# One\n# Two".into(),
+    });
+    assert_eq!(*heard.borrow(), "# One\n# Two");
+    assert_eq!(value.get(), "One\nTwo");
+}
+
+#[test]
+fn an_area_whose_app_handled_the_paste_inserts_nothing() {
+    let (area, value) = focused("kept");
+    let mut area = area.on_paste(|_| PasteAnswer::HandledByApp);
+    area.on_event(&Event::Paste {
+        text: "x\ny".into(),
+    });
+    assert_eq!(value.get(), "kept");
+}

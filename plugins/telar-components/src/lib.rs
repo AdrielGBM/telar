@@ -88,7 +88,7 @@ pub use inputs::slider::slider::{SliderProps, SliderTokens, slider};
 pub use inputs::stepper::stepper::{StepperProps, StepperTokens, stepper};
 pub use inputs::swatches::swatches::{SwatchesProps, SwatchesTokens, swatches};
 pub use inputs::text_field::text_field::{
-    FieldKeyHandler, TextFieldProps, TextFieldTokens, text_field,
+    FieldKeyHandler, FieldPasteHandler, TextFieldProps, TextFieldTokens, text_field,
 };
 pub use inputs::toggle::toggle::{ToggleProps, ToggleTokens, toggle};
 pub use layout::accordion::accordion::{AccordionProps, AccordionTokens, accordion};

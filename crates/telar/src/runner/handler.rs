@@ -1112,6 +1112,7 @@ where
             Event::KeyPressed { .. }
                 | Event::KeyReleased { .. }
                 | Event::Ime(_)
+                | Event::Paste { .. }
                 | Event::PointerMoved { .. }
                 | Event::PointerPressed { .. }
                 | Event::PointerReleased { .. }

@@ -2,6 +2,7 @@ use crate::context::reset_layout_runtime;
 use layout_core::AvailableSpace;
 use platform_core::PointerSource;
 use renderer_core::{Color, DrawCommand, LineHeight, Paint, TextAlign};
+use std::cell::RefCell;
 use std::time::Duration;
 
 use super::*;
@@ -1113,4 +1114,104 @@ fn an_unfocused_field_carries_no_editing_state() {
     let (input, _) = focused_input("ab");
     focus::clear();
     assert_eq!(editing_of(&input), None);
+}
+
+fn pasted(text: &str) -> Event {
+    Event::Paste { text: text.into() }
+}
+
+/// With no hook a paste is inserted as it came, replacing the selection.
+#[test]
+fn a_paste_without_a_hook_replaces_the_selection() {
+    let (mut input, value) = focused_input("hello");
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    assert_eq!(input.on_event(&pasted("p!")), EventResult::Handled);
+    assert_eq!(value.get(), "help!");
+    assert_eq!(input.editor.caret_at(&value.get()), 5);
+}
+
+/// The hook's text goes in where the pasted one would have, and what it was given is what arrived.
+#[test]
+fn a_hook_can_insert_other_text_in_place_of_the_selection() {
+    let (input, value) = focused_input("hello world");
+    let heard = Rc::new(RefCell::new(Vec::new()));
+    let hearing = Rc::clone(&heard);
+    let mut input = input.on_paste(move |text| {
+        hearing.borrow_mut().push(text.to_string());
+        PasteAnswer::Insert(text.to_uppercase())
+    });
+    input.on_event(&chord(Key::Char('a')));
+    input.on_event(&pasted("abc"));
+    assert_eq!(value.get(), "ABC");
+    assert_eq!(*heard.borrow(), ["abc"]);
+
+    input.on_event(&pasted("x"));
+    assert_eq!(
+        value.get(),
+        "ABCX",
+        "with nothing selected it goes in at the caret"
+    );
+}
+
+/// The application took the paste: the field inserts nothing and keeps its selection, and the application's own change to the value stands.
+#[test]
+fn a_paste_the_app_handled_inserts_nothing() {
+    let (input, value) = focused_input("hello");
+    let taken = value;
+    let mut input = input.on_paste(move |text| {
+        taken.set(format!("app:{text}"));
+        PasteAnswer::HandledByApp
+    });
+    assert_eq!(input.on_event(&pasted("block")), EventResult::Handled);
+    assert_eq!(value.get(), "app:block");
+}
+
+#[test]
+fn a_handled_paste_leaves_the_text_and_the_selection_alone() {
+    let (input, value) = focused_input("hello");
+    let mut input = input.on_paste(|_| PasteAnswer::HandledByApp);
+    input.on_event(&chord(Key::Char('a')));
+    input.on_event(&pasted("block"));
+    assert_eq!(value.get(), "hello");
+    assert_eq!(input.editor.selection("hello"), Some((0, 5)));
+}
+
+/// An application that keeps a step per change of the value, as an undo does, finds one step for a transformed paste: the text from before it.
+#[test]
+fn a_transformed_paste_is_one_change_of_the_value() {
+    let (input, value) = focused_input("hello world");
+    let steps = Rc::new(RefCell::new(Vec::<String>::new()));
+    let kept = Rc::clone(&steps);
+    reactive_core::effect(move || kept.borrow_mut().push(value.get()));
+    let mut input = input.on_paste(|text| PasteAnswer::Insert(format!("<{text}>")));
+    input.on_event(&chord(Key::Char('a')));
+    steps.borrow_mut().clear();
+
+    input.on_event(&pasted("one two"));
+
+    assert_eq!(value.get(), "<one two>");
+    assert_eq!(
+        *steps.borrow(),
+        ["<one two>"],
+        "no step between the cut and the insert"
+    );
+}
+
+/// A field of one line flattens what the hook answers as it flattens a paste with no hook.
+#[test]
+fn a_single_line_field_keeps_one_line_whatever_the_hook_answers() {
+    let (input, value) = focused_input("");
+    let mut input = input.on_paste(|text| PasteAnswer::Insert(format!("{text}\nmore")));
+    input.on_event(&pasted("a"));
+    assert!(!value.get().contains('\n'), "{:?}", value.get());
+}
+
+/// Only the field that holds the keyboard hears a paste.
+#[test]
+fn a_paste_is_not_taken_by_a_field_that_is_not_the_keyboard_target() {
+    let (mut input, value) = focused_input("hi");
+    focus::clear();
+    assert_eq!(input.on_event(&pasted("x")), EventResult::Ignored);
+    assert_eq!(value.get(), "hi");
 }

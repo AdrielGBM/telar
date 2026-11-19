@@ -284,6 +284,10 @@ impl TextEntry {
                 let composing = composing.clone();
                 move |event| on_before_input(event, &composing)
             }),
+            listen(target, "paste", false, {
+                let composing = composing.clone();
+                move |event| on_paste(event, &composing)
+            }),
             listen(target, "input", false, {
                 let (field, shown, composing) = (field.clone(), shown.clone(), composing.clone());
                 move |event| on_input(event, &field, &shown, &composing)
@@ -571,6 +575,24 @@ impl Drop for TextEntry {
     }
 }
 
+/// A paste from any gesture, delivered whole as the field's own paste event rather than as the keys that would have typed it, so the field can hand it to the application before anything is inserted.
+///
+/// The shortcut is heard here too, and its key is kept from the platform in [`on_key_down`]: the text comes from the event, which is the one place a browser gives it up without asking the page for the clipboard.
+fn on_paste(event: &web_sys::Event, composing: &RefCell<Composing>) {
+    event.prevent_default();
+    if composing.borrow().active {
+        return;
+    }
+    let Some(text) = event
+        .dyn_ref::<web_sys::ClipboardEvent>()
+        .and_then(web_sys::ClipboardEvent::clipboard_data)
+        .and_then(|data| data.get_data("text/plain").ok())
+    else {
+        return;
+    };
+    platform_core::post_event(Event::Paste { text });
+}
+
 /// The edits a browser reports before making them, as the keys the field would have received.
 ///
 /// `beforeinput` rather than `keydown` because this is where the ones a key never named arrive: a deletion from a soft keyboard, a line dictated, a paste. The default is prevented in every case — the element shows what the field shows, and only the field's next frame changes that.
@@ -593,7 +615,7 @@ fn on_before_input(event: &web_sys::Event, composing: &RefCell<Composing>) {
                 post_text(&text);
             }
         }
-        "insertText" | "insertReplacementText" | "insertFromPaste" => {
+        "insertText" | "insertReplacementText" => {
             event.prevent_default();
             let Some(text) = event.data() else {
                 return;
@@ -800,6 +822,10 @@ fn on_key_down(event: &web_sys::Event, field: &Standing, composing: &RefCell<Com
         }
         return;
     }
+    if is_paste_chord(event) {
+        event.stop_propagation();
+        return;
+    }
     // A modifier held is a command, not a character, and commands stay the platform's.
     if event.ctrl_key() || event.meta_key() {
         return;
@@ -807,6 +833,10 @@ fn on_key_down(event: &web_sys::Event, field: &Standing, composing: &RefCell<Com
     if event.key().chars().count() == 1 {
         event.stop_propagation();
     }
+}
+
+fn is_paste_chord(event: &web_sys::KeyboardEvent) -> bool {
+    (event.ctrl_key() || event.meta_key()) && event.key().eq_ignore_ascii_case("v")
 }
 
 fn field_keeps_tab(event: &web_sys::KeyboardEvent) -> bool {

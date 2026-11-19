@@ -42,7 +42,10 @@ impl KeyRoute {
     pub fn of(event: &Event, holds_keys: bool) -> Option<Self> {
         let tab = match event {
             Event::KeyPressed { key, .. } => *key == Key::Named(NamedKey::Tab),
-            Event::KeyReleased { .. } | Event::Ime(_) | Event::SelectionMoved { .. } => false,
+            Event::KeyReleased { .. }
+            | Event::Ime(_)
+            | Event::SelectionMoved { .. }
+            | Event::Paste { .. } => false,
             _ => return None,
         };
         Some(match (holds_keys, tab) {

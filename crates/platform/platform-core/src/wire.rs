@@ -183,6 +183,7 @@ wire_enum!(Event {
     Dropped { x, y, data } = 27,
     DragEnded { outcome } = 28,
     SelectionMoved { selection } = 29,
+    Paste { text } = 30,
 });
 
 impl Shaped for MimeType {

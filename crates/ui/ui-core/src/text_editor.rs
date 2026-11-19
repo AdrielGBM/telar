@@ -47,6 +47,20 @@ const TAB_INSERT: &str = "    ";
 /// What hears an editor's keys before it does, and answers whether it took one.
 type KeyHandler = dyn Fn(&Key, ModifiersState) -> bool;
 
+/// What hears the text about to be pasted, and says what becomes of it.
+type PasteHandler = dyn Fn(&str) -> PasteAnswer;
+
+/// What an editor's paste hook answers for the text being pasted.
+///
+/// The text is whatever the gesture brought, before the editor admits it: the hook sees a line break even in a field of one line. What [`Insert`](Self::Insert) carries goes through the same admission, so a single-line field flattens it as it flattens a paste with no hook.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PasteAnswer {
+    /// Insert this text in place of the selection, or at the caret when nothing is selected. The whole paste is one change of the bound value.
+    Insert(String),
+    /// The application took the paste and has updated what it keeps: the editor inserts nothing.
+    HandledByApp,
+}
+
 /// A line drawn under a run of the editor's text: a misspelt word, the part of a formula an error is about.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Underline {
@@ -192,6 +206,7 @@ pub(crate) struct Editor {
     pub(crate) on_submit: Option<Handler>,
     pub(crate) on_cancel: Option<Handler>,
     pub(crate) on_key: Option<Box<KeyHandler>>,
+    pub(crate) on_paste: Option<Box<PasteHandler>>,
     pub(crate) tab_key: TabKey,
     pub(crate) underlines: Option<Box<dyn Fn() -> Vec<Underline>>>,
     _input: InputHandle,
@@ -323,6 +338,7 @@ impl Editor {
             on_submit: None,
             on_cancel: None,
             on_key: None,
+            on_paste: None,
             tab_key: TabKey::MovesFocus,
             underlines: None,
             _input: input,
@@ -486,15 +502,10 @@ impl Editor {
                 edited = true;
             }
             Key::Char('v') | Key::Char('V') if mods.is_primary(convention) => {
-                let Some(pasted) = services_core::clipboard_text() else {
-                    return EventResult::Ignored;
+                return match services_core::clipboard_text() {
+                    Some(pasted) => self.paste(&pasted),
+                    None => EventResult::Ignored,
                 };
-                let pasted = self.admitted(&pasted);
-                if pasted.is_empty() && self.selection(&text).is_none() {
-                    return EventResult::Ignored;
-                }
-                caret = replace(&mut text, caret, &pasted);
-                edited = true;
             }
             // Any other chord is a shortcut, not text.
             Key::Char(_) if mods.is_ctrl || mods.is_meta => return EventResult::Ignored,
@@ -596,6 +607,32 @@ impl Editor {
         // An anchor that caught up with the caret is no selection, and keeping it would make the next unshifted arrow collapse to a range of nothing. An edit drops it outright: kept, the anchor sat where the caret was before the letter went in, so the next keystroke replaced what had just been typed.
         self.anchor
             .set(anchor.filter(|anchor| *anchor != caret && !edited));
+        EventResult::Handled
+    }
+
+    /// Pastes `pasted` as the gesture that brought it asks, through the paste hook when there is one. The text goes in as one change of the value, so whatever follows the value sees a single edit.
+    pub(crate) fn paste(&mut self, pasted: &str) -> EventResult {
+        self.blink.wake();
+        self.goal_x = None;
+        let inserted = match &self.on_paste {
+            Some(hook) => match hook(pasted) {
+                PasteAnswer::Insert(text) => text,
+                PasteAnswer::HandledByApp => return EventResult::Handled,
+            },
+            None => pasted.to_string(),
+        };
+        let inserted = self.admitted(&inserted);
+        let mut text = self.value.get();
+        let caret = self.caret_at(&text);
+        if inserted.is_empty() && self.selection(&text).is_none() {
+            return EventResult::Ignored;
+        }
+        let at = self.take_selection(&mut text).unwrap_or(caret);
+        text.insert_str(at, &inserted);
+        self.value.set(text);
+        self.caret.set(at + inserted.len());
+        self.affinity.set(Affinity::Downstream);
+        self.anchor.set(None);
         EventResult::Handled
     }
 
@@ -794,6 +831,11 @@ impl Editor {
                 self.scroll_by(delta)
             }
             Event::Ime(ime) if focus::is_key_target(self.id) => self.compose(ime),
+            Event::Paste { text }
+                if focus::is_key_target(self.id) && !self.composition.is_active() =>
+            {
+                self.paste(text)
+            }
             Event::SelectionMoved { selection } if focus::is_key_target(self.id) => {
                 match focus::perform(self.id, AccessAction::SetSelection(*selection)) {
                     true => EventResult::Handled,

@@ -192,6 +192,9 @@ fn every_event() -> Vec<Event> {
                 focus: 2,
             },
         },
+        Event::Paste {
+            text: "line one\nline two".into(),
+        },
         Event::SafeAreaChanged {
             insets: Insets::new(44.0, 0.0, 34.0, 0.0),
         },
@@ -252,12 +255,12 @@ fn every_event_round_trips() {
         tags.insert(encode(&event)[0]);
         round_trip(event);
     }
-    assert_eq!(tags.len(), 30);
+    assert_eq!(tags.len(), 31);
     assert_eq!(
-        decode::<Event>(&[30]),
+        decode::<Event>(&[31]),
         Err(WireError::Tag {
             of: "Event",
-            tag: 30
+            tag: 31
         })
     );
 }

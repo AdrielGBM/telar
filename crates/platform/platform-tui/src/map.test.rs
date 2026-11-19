@@ -102,28 +102,14 @@ fn a_modifier_change_is_announced_once() {
 }
 
 #[test]
-fn a_paste_is_typed() {
-    let out = events(&mut mapper(), TermEvent::Paste("hi".into()));
-    assert_eq!(out.len(), 4);
-    assert!(
-        matches!(
-            out[0],
-            Event::KeyPressed {
-                key: Key::Char('h'),
-                ..
-            }
-        ),
-        "a paste arrives as typed text: {out:?}"
-    );
-    assert!(
-        matches!(
-            out[2],
-            Event::KeyPressed {
-                key: Key::Char('i'),
-                ..
-            }
-        ),
-        "and the rest of it too: {out:?}"
+fn a_paste_arrives_whole() {
+    let out = events(&mut mapper(), TermEvent::Paste("hi there\nagain".into()));
+    assert_eq!(
+        out,
+        [Event::Paste {
+            text: "hi there\nagain".into()
+        }],
+        "one event with the text, not a key per character"
     );
 }
 
@@ -142,21 +128,6 @@ fn the_space_key_arrives_as_named_space() {
             }
         ),
         "a button or checkbox activates on NamedKey::Space, so the key must arrive as it: {out:?}"
-    );
-}
-
-#[test]
-fn a_space_in_a_paste_stays_a_character() {
-    let out = events(&mut mapper(), TermEvent::Paste(" ".into()));
-    assert!(
-        matches!(
-            out[0],
-            Event::KeyPressed {
-                key: Key::Char(' '),
-                ..
-            }
-        ),
-        "a pasted space is typed text, not the Space key: {out:?}"
     );
 }
 

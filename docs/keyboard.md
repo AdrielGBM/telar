@@ -268,6 +268,28 @@ the box's edges and scrolls sideways under it to keep the caret in view, as a ho
 does too, and a field the keyboard leaves shows the start of its value again. A `TextArea` in a scroll area
 brings the caret's row into view of it as the caret moves, rows typed past the bottom of the view included.
 
+### Pasting
+
+Every paste reaches an editor as one piece of text, whichever gesture asked for it, and `on_paste` on `Input`,
+`TextArea` and `text_field` hears it before anything is inserted. The hook takes the text and answers a
+`PasteAnswer`:
+
+- `PasteAnswer::Insert(text)` inserts `text` in place of the selection, or at the caret when nothing is selected.
+  A field of one line still flattens line breaks in it, as it does for a paste with no hook.
+- `PasteAnswer::HandledByApp` inserts nothing: the application took the paste and has updated what it keeps. The
+  selection stays where it was.
+
+A field with no hook inserts what was pasted. What a hook transforms goes in as one change of the bound value, so
+whatever keeps a step per change of it, an undo, finds one.
+
+A hook on `on_key` would not do this: it sees `Mod+V` only, never a paste from a menu or a middle click.
+
+| Target | A paste is reported as |
+| --- | --- |
+| web-dom | The `paste` event of the hidden element the browser types into, so a menu, `Shift+Insert` and a middle click reach the hook as `Mod+V` does. `Mod+V` itself is kept from the platform, so the text is not pasted twice |
+| desktop | The primary modifier with `V`, read from the system clipboard. A middle-click paste from the primary selection is not reported: the window system gives the program no such event |
+| TUI | The terminal's bracketed paste, whole |
+
 ### Tab in a field of several lines
 
 A field that kept Tab for itself would trap a keyboard user: nothing after it could be reached without a

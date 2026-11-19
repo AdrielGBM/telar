@@ -135,6 +135,10 @@ pub enum Event {
     SelectionMoved {
         selection: crate::TextSelection,
     },
+    /// Text pasted into the field that holds the keyboard, from whichever gesture asked for it: a menu, a middle click, a terminal's bracketed paste, or the shortcut where the target reports the gesture itself rather than the keys. Delivered whole, so the field can hand it to the application before anything is inserted.
+    Paste {
+        text: String,
+    },
     /// The held modifier keys changed, and this is the authoritative reading.
     ///
     /// It has to be its own event because the key events cannot carry the news: a bare `Shift` press maps to no [`Key`] at all, so a chord that never types a character would be invisible. The platform also re-sends this when the window regains focus, which is what makes it safe to trust — a state reconstructed from presses and releases goes wrong exactly when the user alt-tabs mid-chord.

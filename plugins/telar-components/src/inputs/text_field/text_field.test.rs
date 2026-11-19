@@ -647,3 +647,38 @@ mod multiline {
         assert!((mounted.frame_height() - rest).abs() < 1.0);
     }
 }
+
+/// What the field's hook answers is what reaches the value, for a field of one line and for one of several, and a paste the application handled leaves the value as the application left it.
+#[test]
+fn a_paste_hook_decides_what_a_field_of_either_kind_inserts() {
+    for multiline in [false, true] {
+        let value = signal(String::new());
+        let (field, rect) = laid_out_field(
+            TextFieldProps::props()
+                .value(value)
+                .multiline(multiline)
+                .on_paste(Rc::new(move |text: &str| match text.strip_prefix("app:") {
+                    Some(_) => {
+                        value.set("taken".to_string());
+                        PasteAnswer::HandledByApp
+                    }
+                    None => PasteAnswer::Insert(text.to_uppercase()),
+                }))
+                .build(),
+        );
+        let mut tree = ComponentList::new(field);
+        let _ = tree.commands();
+        tree.on_event(&press(
+            (rect.x + rect.width / 2.0) as f64,
+            (rect.y + rect.height / 2.0) as f64,
+        ));
+
+        tree.on_event(&Event::Paste { text: "ab".into() });
+        assert_eq!(value.get(), "AB", "multiline: {multiline}");
+
+        tree.on_event(&Event::Paste {
+            text: "app:x".into(),
+        });
+        assert_eq!(value.get(), "taken", "multiline: {multiline}");
+    }
+}

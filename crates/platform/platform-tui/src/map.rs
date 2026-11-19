@@ -127,20 +127,7 @@ impl Mapper {
             }),
             TermEvent::FocusGained => out.push(Event::FocusChanged { is_focused: true }),
             TermEvent::FocusLost => out.push(Event::FocusChanged { is_focused: false }),
-            // A paste arrives as one string; upstream only knows about typing, so it is typed.
-            TermEvent::Paste(text) => {
-                for c in text.chars() {
-                    out.push(Event::KeyPressed {
-                        key: Key::Char(c),
-                        modifiers: ModifiersState::default(),
-                        unmodified: None,
-                    });
-                    out.push(Event::KeyReleased {
-                        key: Key::Char(c),
-                        modifiers: ModifiersState::default(),
-                    });
-                }
-            }
+            TermEvent::Paste(text) => out.push(Event::Paste { text }),
         }
     }
 
