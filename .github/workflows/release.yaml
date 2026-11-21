@@ -230,7 +230,9 @@ jobs:
       - name: Bump the version
         if: steps.state.outputs.pending == 'true'
         id: bump
-        run: echo "next=$(.github/scripts/bump-version.sh)" >> "$GITHUB_OUTPUT"
+        run: |
+          next=$(.github/scripts/bump-version.sh)
+          echo "next=$next" >> "$GITHUB_OUTPUT"
 
       # Pushed with the job's token, so no workflow starts from it; the next push to a branch runs the checks.
       - name: Commit and push

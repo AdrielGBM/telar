@@ -48,6 +48,6 @@ for file in "${documented[@]}"; do
 done
 sed -i -E "/path = /s/version = \"$escaped\"/version = \"$next\"/" "${manifests[@]}"
 
-cargo update --workspace --offline --quiet
+cargo update --workspace --quiet
 
 echo "$next"
