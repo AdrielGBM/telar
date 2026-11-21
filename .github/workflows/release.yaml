@@ -203,6 +203,7 @@ jobs:
 
   # Once the tag's version is on crates.io, cargo resolves it from there instead of the workspace, so the
   # tree has to move on or the publishable check in ci.yaml fails on every push.
+  # The bump lands on dev, where work continues, so main keeps the released tree and its next update from dev stays a fast-forward.
   bump-version:
     name: Bump the workspace past the release
     needs: [create-release, publish-crates, publish-vsix]
@@ -212,7 +213,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: dev
           persist-credentials: true
 
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
