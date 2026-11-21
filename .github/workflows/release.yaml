@@ -214,7 +214,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: dev
-          persist-credentials: true
+          persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
@@ -235,13 +235,11 @@ jobs:
           next=$(.github/scripts/bump-version.sh)
           echo "next=$next" >> "$GITHUB_OUTPUT"
 
-      # Pushed with the job's token, so no workflow starts from it; the next push to a branch runs the checks.
-      - name: Commit and push
+      # Committed with the job's token, so no workflow starts from it; the next push to a branch runs the checks.
+      - name: Commit the bump
         if: steps.state.outputs.pending == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           NEXT: ${{ steps.bump.outputs.next }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -a -m "chore: bump the workspace to $NEXT"
-          git push
+          .github/scripts/commit-signed.sh dev "chore: bump the workspace to $NEXT"
