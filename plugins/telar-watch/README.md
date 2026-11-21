@@ -11,7 +11,7 @@ its own.
 
 ```toml
 # Cargo.toml
-telar-watch = "0.2.3"
+telar-watch = "0.2.4"
 ```
 
 ```rust

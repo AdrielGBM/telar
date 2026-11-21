@@ -8,7 +8,7 @@
 //!
 //! ```toml
 //! # Cargo.toml
-//! telar-watch = "0.2.3"
+//! telar-watch = "0.2.4"
 //! ```
 //!
 //! It ships no `.rsx` tags, so there is nothing to list in `telar.toml`.

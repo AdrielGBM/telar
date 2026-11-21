@@ -233,7 +233,7 @@ its tags without a `use`:
 
 ```toml
 # Cargo.toml
-telar-components = { version = "0.2.3", features = ["icons"] }
+telar-components = { version = "0.2.4", features = ["icons"] }
 
 # telar.toml
 [telar]
@@ -249,7 +249,7 @@ them and the per-tab stacks are [`telar-navigate`](https://docs.rs/telar-navigat
 
 ```toml
 # Cargo.toml
-telar-navigate = "0.2.3"
+telar-navigate = "0.2.4"
 
 # telar.toml
 [telar]
